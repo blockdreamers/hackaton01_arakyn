@@ -5,50 +5,34 @@
 		{
 			tag: 'The problem',
 			big: '80,000',
-			unit: 'tokens',
-			title: 'One shopping page, mostly noise',
-			body: 'Scripts, reviews and banners. The spec an agent needs is a few lines.',
+			unit: 'tokens / page',
+			title: 'Websites are built for people',
+			body: 'When an AI reads a shop page, it pays for images, CSS, scripts and banners. The spec it needs is a few lines.',
 			tone: 'web'
 		},
 		{
-			tag: '01 · Search for people',
+			tag: '01',
 			big: 'Google',
 			unit: '',
-			title: 'Ten blue links',
-			body: 'A person opens the pages, reads them and decides.',
+			title: 'A search engine for people',
+			body: 'Links to pages. A person reads them and decides.',
 			tone: 'past'
 		},
 		{
-			tag: '02 · Search for agents',
+			tag: '02',
 			big: 'Exa',
 			unit: 'index',
-			title: 'Clean text from the whole web',
-			body: 'Better, but the agent still compares sellers and converts units itself.',
+			title: 'A search engine for agents',
+			body: 'Clean text from the whole web. Agents still read, compare and convert units themselves.',
 			tone: 'mid'
 		},
 		{
-			tag: '03 · Search for a domain',
+			tag: '03',
 			big: 'Agent Catalog',
 			unit: '',
-			title: 'Only what you can buy',
-			body: 'Standard parts, one schema, every seller compared. Answers in about 1,000 tokens.',
+			title: 'A search engine for one domain',
+			body: 'Standard manufacturing parts and commodities, normalized and compared across sellers. Agents find the right part in about 1,000 tokens.',
 			tone: 'now'
-		},
-		{
-			tag: 'Same part, one entry',
-			big: 'DIN 912 = ISO 4762',
-			unit: '',
-			title: 'Specs normalized',
-			body: 'Every spelling of the same screw resolves to one product, in mm, W and price per piece.',
-			tone: 'now'
-		},
-		{
-			tag: 'Verify, then pay',
-			big: '0.02',
-			unit: 'USDC',
-			title: 'The agent pays only when the data matches',
-			body: 'Free preview with a data hash, then an x402 payment on Base for the full offers.',
-			tone: 'pay'
 		}
 	];
 
