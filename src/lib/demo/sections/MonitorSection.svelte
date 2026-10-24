@@ -438,7 +438,6 @@
 
 	<section class="console">
 		<div class="console-h">
-			<span class="eyebrow">Run a search</span>
 			<p>Type what an agent would ask. The engine walks the live index below, step by step.</p>
 		</div>
 		<form class="ask" onsubmit={submit}>

@@ -78,7 +78,6 @@
 
 <main class="wrap">
 	<div class="title">
-		<span class="eyebrow">My account</span>
 		<h1>API usage dashboard</h1>
 	</div>
 

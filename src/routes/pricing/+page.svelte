@@ -13,7 +13,6 @@
 
 <main class="pricing">
 	<header class="head">
-		<span class="eyebrow">Pricing</span>
 		<h1>Free to start. Pay for volume.</h1>
 		<p>
 			Every agent gets a free monthly quota. Bulk searching beyond it is billed per call, with an

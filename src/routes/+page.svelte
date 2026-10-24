@@ -168,7 +168,6 @@
 
 	<section class="features" id="features">
 		<div class="section-head compact">
-			<span class="eyebrow">Why agents need their own search</span>
 			<h2>Web search is built for people. This is built for agents.</h2>
 		</div>
 		<IntroCarousel />
@@ -180,7 +179,6 @@
 
 	<section class="demo-section" id="monitor">
 		<div class="demo-head">
-			<span class="eyebrow">Data monitor</span>
 			<h2>What happens inside the index when an agent searches</h2>
 		</div>
 		<MonitorSection />
@@ -212,9 +210,6 @@
 		position: relative;
 		z-index: 1;
 		transition: opacity 0.6s ease;
-	}
-	.eyebrow {
-		margin-bottom: 18px;
 	}
 	.features {
 		position: relative;

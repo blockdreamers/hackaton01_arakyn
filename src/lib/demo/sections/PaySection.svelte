@@ -23,7 +23,6 @@
 
 <div class="wrap">
 	<section class="head">
-		<span class="eyebrow">Payment routes</span>
 		<h2 class="big">Two ways to pay</h2>
 	</section>
 	<div class="routes">
@@ -52,7 +51,6 @@
 	</div>
 
 	<section class="head">
-		<span class="eyebrow">Route 2 · verify, then pay</span>
 		<h2>The agent only pays when the data is right</h2>
 		<p>
 			The fee is for the Agent Catalog data call, not the parts themselves. x402 normally pays first
@@ -124,7 +122,6 @@
 	</div>
 
 	<section class="head">
-		<span class="eyebrow">Next</span>
 		<h2>Companies pay by card, agents pay in USDC</h2>
 		<p>
 			Managing a USDC wallet is a chore for a company. Later, with Circle, a company tops up by card

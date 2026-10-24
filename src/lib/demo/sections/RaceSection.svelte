@@ -57,10 +57,20 @@
 	let freeText = $state('');
 	let lanes = $state<Record<Lane, LaneState>>({ web: empty(), catalog: empty() });
 	let spec = $state<{
+		summary?: string;
+		category?: string;
 		search_terms_ko?: string[];
 		search_terms_en?: string[];
+		attributes?: { field: string; value: string }[];
+		max_unit_price?: number | null;
+		currency?: string | null;
+		qty?: number | null;
 		ambiguities?: string[];
 	} | null>(null);
+	let showTerms = $state(false);
+	const terms = $derived([
+		...new Set([...(spec?.search_terms_ko ?? []), ...(spec?.search_terms_en ?? [])])
+	]);
 	let running = $state(false);
 	let finished = $state(false);
 	let errorMsg = $state('');
@@ -214,12 +224,11 @@
 
 <div class="race">
 	<header class="head">
-		<span class="eyebrow">Live demo</span>
-		<h1>Same question. How many tokens?</h1>
+		<h1>Search for the part you want to buy</h1>
 		<div class="versus">
-			<span class="vs-side web"><i></i>Agent + web search</span>
+			<span class="vs-side web"><i></i>AI Web Search</span>
 			<span class="vs-mid">vs</span>
-			<span class="vs-side cat"><i></i>Agent + Agent Catalog</span>
+			<span class="vs-side cat"><i></i>Agent Catalog</span>
 		</div>
 	</header>
 
@@ -246,7 +255,7 @@
 		<div class="split idle" aria-hidden="true">
 			{#each ['web', 'catalog'] as const as lane (lane)}
 				<section class="lane {lane}">
-					<h2>{lane === 'web' ? 'Agent + web search' : 'Agent + Agent Catalog'}</h2>
+					<h2>{lane === 'web' ? 'AI Web Search' : 'Agent Catalog'}</h2>
 					<div class="tok">
 						<div class="k">Input tokens</div>
 						<div class="tokv">0</div>
@@ -263,19 +272,47 @@
 	{/if}
 	{#if running || finished}
 		<div class="asked">
-			<span class="mono">“{asked}”</span>
 			{#if finished}<button class="clear" type="button" onclick={clearAll}>New search</button>{/if}
 		</div>
 		{#if spec}
 			<div class="spec">
-				<span class="k">Parsed spec</span>
-				{#each [...(spec.search_terms_ko ?? []), ...(spec.search_terms_en ?? [])] as term, i (i)}<span
-						class="chip">{term}</span
-					>{/each}
-				{#each spec.ambiguities ?? [] as a, i (i)}<span class="amb">? {a}</span>{/each}
+				<div class="spec-main">
+					<span class="k">Understood as</span>
+					<p class="sum">{spec.summary ?? asked}</p>
+					<div class="fields">
+						{#if spec.category}<span><em>category</em>{spec.category}</span>{/if}
+						{#if spec.qty}<span><em>qty</em>{spec.qty.toLocaleString()}</span>{/if}
+						{#if spec.max_unit_price}<span
+								><em>max / pc</em>{spec.max_unit_price.toLocaleString()}
+								{spec.currency ?? ''}</span
+							>{/if}
+						{#each spec.attributes ?? [] as at, i (i)}<span><em>{at.field}</em>{at.value}</span
+							>{/each}
+					</div>
+					<div class="terms">
+						<em>searching for</em>
+						{#each showTerms ? terms : terms.slice(0, 3) as t, i (i)}<span class="chip">{t}</span
+							>{/each}
+						{#if terms.length > 3}<button
+								type="button"
+								class="more"
+								onclick={() => (showTerms = !showTerms)}
+								>{showTerms ? 'less' : `+${terms.length - 3}`}</button
+							>{/if}
+					</div>
+				</div>
+				{#if spec.ambiguities?.length}
+					<div class="spec-q">
+						<span class="k">Would sharpen the search</span>
+						<ol>
+							{#each spec.ambiguities.slice(0, 3) as q, i (i)}<li>{q}</li>{/each}
+						</ol>
+						<span class="note">The agents continue with their best guess.</span>
+					</div>
+				{/if}
 			</div>
 		{/if}
-		<div class="split">
+		<div class="seam-anchor">
 			{#if ratio > 0}
 				<div class="seam" style:--heat={heat} aria-hidden="true">
 					<Odometer
@@ -286,11 +323,13 @@
 					/>
 				</div>
 			{/if}
+		</div>
+		<div class="split">
 			{#each ['web', 'catalog'] as const as lane (lane)}
 				{@const l = lanes[lane]}
 				<section class="lane {lane}">
 					<h2>
-						{lane === 'web' ? 'Agent + web search' : 'Agent + Agent Catalog'}
+						{lane === 'web' ? 'AI Web Search' : 'Agent Catalog'}
 						<span class="badge">{lane === 'web' ? 'web_search · web_fetch' : 'live DB · x402'}</span
 						>
 					</h2>
@@ -469,7 +508,7 @@
 	}
 	.asked {
 		display: flex;
-		justify-content: space-between;
+		justify-content: flex-end;
 		align-items: center;
 		gap: 12px;
 		font-size: 14px;
@@ -688,27 +727,88 @@
 		color: var(--muted);
 	}
 	.spec {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-		align-items: center;
-		font-size: 13px;
+		display: grid;
+		grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+		gap: 14px;
+		padding: 16px 18px;
+		border-radius: var(--radius);
+		border: 1px solid var(--line-strong);
+		background: var(--glass);
 	}
 	.spec .k {
+		display: block;
 		font: 600 11px var(--mono);
 		letter-spacing: 0.12em;
 		text-transform: uppercase;
 		color: var(--muted-2);
-		margin-right: 4px;
+		margin-bottom: 6px;
+	}
+	.sum {
+		font-size: 15.5px;
+		font-weight: 600;
+		line-height: 1.45;
+	}
+	.fields,
+	.terms {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin-top: 10px;
+		font-size: 12.5px;
+		align-items: center;
+	}
+	.fields span {
+		padding: 3px 9px;
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid var(--line);
+	}
+	.fields em,
+	.terms em {
+		font: 500 10.5px var(--mono);
+		font-style: normal;
+		color: var(--muted-2);
+		margin-right: 6px;
+		text-transform: uppercase;
 	}
 	.chip {
-		padding: 3px 10px;
+		padding: 2px 9px;
 		border-radius: 999px;
 		border: 1px solid var(--brand-line);
 		color: var(--ink);
 	}
-	.amb {
+	.more {
+		border: 0;
+		background: none;
+		color: var(--brand-2);
+		font: 600 12px var(--font);
+		cursor: pointer;
+	}
+	.spec-q {
+		border-left: 1px solid var(--line);
+		padding-left: 14px;
+	}
+	.spec-q ol {
+		margin: 0 0 6px 18px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 13px;
+		line-height: 1.45;
 		color: var(--amber);
+	}
+	.spec-q .note {
+		font-size: 12px;
+		color: var(--muted-2);
+	}
+	@media (max-width: 760px) {
+		.spec {
+			grid-template-columns: 1fr;
+		}
+		.spec-q {
+			border-left: 0;
+			padding-left: 0;
+		}
 	}
 	.results {
 		margin: 8px 0 0 18px;
@@ -750,12 +850,16 @@
 		color: var(--red);
 		border-color: var(--red);
 	}
+	.seam-anchor {
+		position: relative;
+		height: 0;
+		z-index: 3;
+	}
 	.seam {
 		position: absolute;
-		z-index: 2;
 		left: 50%;
-		top: -22px;
-		transform: translateX(-50%) scale(calc(0.9 + var(--heat, 0) * 0.5));
+		top: 0;
+		transform: translate(-50%, -50%) scale(calc(0.9 + var(--heat, 0) * 0.5));
 		padding: 8px 14px;
 		border-radius: 999px;
 		font: 800 20px var(--mono);

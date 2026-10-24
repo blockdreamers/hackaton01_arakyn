@@ -38,7 +38,6 @@
 
 <section class="showcase" class:embedded aria-label="Products in the index">
 	{#if !embedded}<div class="head">
-		<span class="eyebrow">Live from the index</span>
 		<p>
 			{items.length
 				? `${items.length} real products, sampled across every source`
