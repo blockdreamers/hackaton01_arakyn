@@ -41,12 +41,13 @@
 
 	// Always docked bottom-right; the user can minimize it to the launcher pill (remembered per browser).
 	const KEY = 'agent-catalog-dock-minimized';
-	let open = $state(true);
+	// starts as a launcher button, like a support chat; opens when clicked
+	let open = $state(false);
 	$effect(() => {
 		try {
 			const saved = localStorage.getItem(KEY);
 			// on phones start minimized so the panel doesn't cover the hero
-			if (saved === '1' || (saved === null && innerWidth < 640)) open = false;
+			if (saved === '0') open = true;
 		} catch {
 			// storage unavailable: stay open
 		}
@@ -337,7 +338,7 @@
 </div>
 
 <style>
-	/* White panel docked bottom-right, logo-blue borders. */
+	/* Support-chat style: a launcher button that opens a white floating panel. */
 	.dock {
 		--d-ink: #111827;
 		--d-muted: #6b7280;
@@ -359,14 +360,20 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 10px;
-		padding: 12px 18px;
+		padding: 14px 20px;
 		border-radius: 999px;
-		border: 1px solid var(--brand-line);
+		border: 0;
 		background: var(--brand);
 		color: #fff;
-		font: 600 14px var(--font);
+		font: 600 15px var(--font);
 		cursor: pointer;
-		box-shadow: 0 14px 40px -10px rgba(31, 75, 255, 0.7);
+		box-shadow:
+			0 2px 4px rgba(0, 0, 0, 0.12),
+			0 12px 28px -6px rgba(0, 0, 0, 0.4);
+		transition: transform 0.18s ease;
+	}
+	.launch:hover {
+		transform: translateY(-2px) scale(1.03);
 	}
 	.launch img {
 		height: 20px;
@@ -405,22 +412,33 @@
 	}
 	.panel {
 		width: min(380px, calc(100vw - 40px));
-		max-height: min(80vh, 820px);
+		height: min(86vh, 760px);
 		display: flex;
 		flex-direction: column;
-		border-radius: 18px;
-		/* gradient ring + raised, slightly puffy look */
-		border: 2px solid transparent;
-		background:
-			linear-gradient(#fff, #fff) padding-box,
-			linear-gradient(135deg, #5df0a8 0%, #3d6bff 45%, #8b5cf6 100%) border-box;
+		border-radius: 20px;
+		border: 0;
+		background: #fff;
+		/* no colour: a soft light rim plus stacked neutral shadows, so it reads as raised on the dark page */
 		box-shadow:
-			0 28px 60px -18px rgba(31, 75, 255, 0.55),
-			0 10px 22px -12px rgba(15, 23, 42, 0.5),
-			inset 0 2px 0 rgba(255, 255, 255, 0.9),
-			inset 0 -3px 8px rgba(31, 75, 255, 0.08);
-		transform: translateY(-2px);
+			0 0 0 1px rgba(255, 255, 255, 0.1),
+			0 0 40px -6px rgba(255, 255, 255, 0.18),
+			0 30px 80px -20px rgba(0, 0, 0, 0.9),
+			inset 0 2px 0 rgba(255, 255, 255, 1),
+			inset 0 -6px 14px -8px rgba(0, 0, 0, 0.12);
 		overflow: hidden;
+		transform-origin: bottom right;
+		animation: dock-open 0.32s cubic-bezier(0.2, 0.9, 0.25, 1.15);
+	}
+	@keyframes dock-open {
+		from {
+			opacity: 0;
+			transform: translateY(16px) scale(0.6);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.panel {
+			animation: none;
+		}
 	}
 	.ph {
 		display: flex;
@@ -525,6 +543,8 @@
 	}
 	.body {
 		padding: 10px 14px;
+		flex: 1;
+		min-height: 0;
 		overflow: auto;
 		display: flex;
 		flex-direction: column;
