@@ -1,13 +1,29 @@
+<script lang="ts">
+	import { t } from './i18n.svelte.ts';
+</script>
+
 <div class="tiers">
 	<div class="tier">
-		<span class="tier-tag">Free</span>
-		<div class="tier-price">1,000 <small>calls / month</small></div>
-		<p>Previews and full offers up to the quota. No card, no wallet.</p>
+		<span class="tier-tag">{t('Free', '무료')}</span>
+		<div class="tier-price">1,000 <small>{t('calls / month', '회 / 월')}</small></div>
+		<p>
+			{t(
+				'Previews and full offers up to the quota. No card, no wallet.',
+				'한도 안에서는 미리보기와 전체 결과 모두 무료. 카드도 지갑도 필요 없습니다.'
+			)}
+		</p>
 	</div>
 	<div class="tier hot">
-		<span class="tier-tag">Bulk</span>
-		<div class="tier-price">$0.02 <small>per call after quota</small></div>
-		<p>Volume pricing for agents that search all day. Search previews stay free.</p>
+		<span class="tier-tag">{t('Bulk', '대량')}</span>
+		<div class="tier-price">
+			$0.02 <small>{t('per call after quota', '한도 초과 시 호출당')}</small>
+		</div>
+		<p>
+			{t(
+				'Volume pricing for agents that search all day. Search previews stay free.',
+				'하루 종일 검색하는 에이전트를 위한 사용량 요금. 검색 미리보기는 계속 무료입니다.'
+			)}
+		</p>
 	</div>
 </div>
 

@@ -215,9 +215,14 @@ export interface TraceRow extends Product {
 	reason: string;
 }
 
-export async function monitorSearch(q: string) {
+/** `override`: the keywords the race's spec step already chose, so every search box on the page
+ * looks up the same thing; otherwise the query is split into keywords here. */
+export async function monitorSearch(q: string, override?: string[]) {
 	const tree = await getTree();
-	const terms = termsOf(q);
+	const picked = [
+		...new Set((override ?? []).map((t) => t.trim().toLowerCase()).filter((t) => t.length >= 1))
+	].slice(0, 8);
+	const terms = picked.length ? picked : termsOf(q);
 	const t0 = performance.now();
 	const hit = (s: string) => terms.find((t) => s.toLowerCase().includes(t));
 	const anyTerm: SQL = terms.length

@@ -1,40 +1,54 @@
 <script lang="ts">
 	// The "why" in one compact strip: drag (mouse or touch) or use the arrows to move between
 	// one-idea slides. The neighbouring slides peek in so it reads as something to drag.
-	const SLIDES = [
+	import { t } from './i18n.svelte.ts';
+
+	const SLIDES = $derived([
 		{
-			tag: 'The problem',
+			tag: t('The problem', '문제'),
 			big: '80,000',
-			unit: 'tokens / page',
-			title: 'Websites are built for people',
-			body: 'When an AI reads a shop page, it pays for images, CSS, scripts and banners. The spec it needs is a few lines.',
+			unit: t('tokens / page', '토큰 / 페이지'),
+			title: t('Websites are built for people', '웹사이트는 사람을 위해 만들어졌습니다'),
+			body: t(
+				'When an AI reads a shop page, it pays for images, CSS, scripts and banners. The spec it needs is a few lines.',
+				'AI가 쇼핑몰 페이지를 읽으면 이미지, CSS, 스크립트, 배너까지 모두 토큰으로 냅니다. 정작 필요한 스펙은 몇 줄뿐인데요.'
+			),
 			tone: 'web'
 		},
 		{
 			tag: '01',
 			big: 'Google',
 			unit: '',
-			title: 'A search engine for people',
-			body: 'Links to pages. A person reads them and decides.',
+			title: t('A search engine for people', '사람을 위한 검색엔진'),
+			body: t(
+				'Links to pages. A person reads them and decides.',
+				'페이지 링크를 보여주고, 읽고 판단하는 건 사람의 몫입니다.'
+			),
 			tone: 'past'
 		},
 		{
 			tag: '02',
 			big: 'Exa',
-			unit: 'index',
-			title: 'A search engine for agents',
-			body: 'Clean text from the whole web. Agents still read, compare and convert units themselves.',
+			unit: t('index', '인덱스'),
+			title: t('A search engine for agents', '에이전트를 위한 검색엔진'),
+			body: t(
+				'Clean text from the whole web. Agents still read, compare and convert units themselves.',
+				'웹 전체에서 깔끔한 텍스트를 가져옵니다. 하지만 읽고, 비교하고, 단위를 맞추는 일은 여전히 에이전트가 직접 해야 합니다.'
+			),
 			tone: 'mid'
 		},
 		{
 			tag: '03',
 			big: 'Agent Catalog',
 			unit: '',
-			title: 'A search engine for one domain',
-			body: 'Standard manufacturing parts and commodities, normalized and compared across sellers. Agents find the right part in about 1,000 tokens.',
+			title: t('A search engine for one domain', '하나의 도메인을 위한 검색엔진'),
+			body: t(
+				'Standard manufacturing parts and commodities, normalized and compared across sellers. Agents find the right part in about 1,000 tokens.',
+				'표준 제조 부품과 소모품을 판매처별로 정규화해 비교합니다. 에이전트는 약 1,000토큰이면 맞는 부품을 찾습니다.'
+			),
 			tone: 'now'
 		}
-	];
+	]);
 
 	let index = $state(0);
 	let dragX = $state(0);
@@ -70,7 +84,12 @@
 	}
 </script>
 
-<div class="carousel" role="region" aria-roledescription="carousel" aria-label="Why Agent Catalog">
+<div
+	class="carousel"
+	role="region"
+	aria-roledescription="carousel"
+	aria-label={t('Why Agent Catalog', '왜 Agent Catalog인가')}
+>
 	<div
 		class="viewport"
 		bind:this={viewport}
@@ -94,7 +113,7 @@
 					class="slide {s.tone}"
 					class:active={i === index}
 					aria-hidden={i !== index}
-					aria-label="{i + 1} of {SLIDES.length}"
+					aria-label={t(`${i + 1} of ${SLIDES.length}`, `${SLIDES.length}개 중 ${i + 1}번째`)}
 				>
 					<span class="tag">{s.tag}</span>
 					<div class="big">
@@ -107,26 +126,29 @@
 		</div>
 	</div>
 	<div class="controls">
-		<button type="button" aria-label="Previous" disabled={index === 0} onclick={() => go(index - 1)}
-			>←</button
+		<button
+			type="button"
+			aria-label={t('Previous', '이전')}
+			disabled={index === 0}
+			onclick={() => go(index - 1)}>←</button
 		>
 		<div class="dots">
 			{#each SLIDES as slide, i (i)}
 				<button
 					type="button"
 					class:on={i === index}
-					aria-label="Slide {i + 1}: {slide.title}"
+					aria-label={t(`Slide ${i + 1}: ${slide.title}`, `${i + 1}번 슬라이드: ${slide.title}`)}
 					onclick={() => go(i)}
 				></button>
 			{/each}
 		</div>
 		<button
 			type="button"
-			aria-label="Next"
+			aria-label={t('Next', '다음')}
 			disabled={index === SLIDES.length - 1}
 			onclick={() => go(index + 1)}>→</button
 		>
-		<span class="hint">Drag to explore</span>
+		<span class="hint">{t('Drag to explore', '드래그해서 넘겨보세요')}</span>
 	</div>
 </div>
 

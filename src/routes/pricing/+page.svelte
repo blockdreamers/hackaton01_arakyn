@@ -5,18 +5,21 @@
 	import PaySection from '#lib/demo/sections/PaySection.svelte';
 	import SiteFooter from '#lib/demo/SiteFooter.svelte';
 	import SearchDock from '#lib/demo/SearchDock.svelte';
+	import { t } from '#lib/demo/i18n.svelte.ts';
 </script>
 
-<svelte:head><title>Pricing · Agent Catalog</title></svelte:head>
+<svelte:head><title>{t('Pricing', '요금')} · Agent Catalog</title></svelte:head>
 
 <TopNav />
 
 <main class="pricing">
 	<header class="head">
-		<h1>Free to start. Pay for volume.</h1>
+		<h1>{t('Free to start. Pay for volume.', '무료로 시작하고, 쓴 만큼만 내세요.')}</h1>
 		<p>
-			Every agent gets a free monthly quota. Bulk searching beyond it is billed per call, with an
-			API key or with a wallet and x402.
+			{t(
+				'Every agent gets a free monthly quota. Bulk searching beyond it is billed per call, with an API key or with a wallet and x402.',
+				'모든 에이전트에게 매월 무료 한도가 주어집니다. 한도를 넘는 대량 검색은 호출당 과금되며, API 키 또는 지갑과 x402로 결제할 수 있습니다.'
+			)}
 		</p>
 	</header>
 	<PricingTiers />

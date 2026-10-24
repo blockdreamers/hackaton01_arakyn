@@ -4,12 +4,17 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
+	import { onMount } from 'svelte';
+	import { initLang } from '#lib/demo/i18n.svelte.ts';
 
 	let { data, children }: LayoutProps = $props();
 
 	// The one-page demo and the account page draw their own full-bleed chrome.
 	const DEMO_ROUTES = new Set(['/', '/race', '/monitor', '/pay', '/pricing', '/account']);
 	const demo = $derived(DEMO_ROUTES.has(page.route.id ?? ''));
+
+	// apply the saved EN / 한국어 choice
+	onMount(initLang);
 </script>
 
 <svelte:head>

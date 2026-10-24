@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { t } from './i18n.svelte.ts';
+
 	const year = new Date().getFullYear();
 </script>
 
@@ -9,28 +11,37 @@
 				<a class="brand" href="/"
 					><img src="/brand/logo-color.png" alt="Agent Catalog" width="186" height="31" /></a
 				>
-				<p>A buyable-parts index for AI agents.</p>
+				<p>
+					{t('A buyable-parts index for AI agents.', 'AI 에이전트를 위한 구매 가능한 부품 인덱스.')}
+				</p>
 			</div>
 			<div class="footer-cols">
 				<div>
-					<h4>Demo</h4>
-					<a href="/#race">Token race</a><a href="/#monitor">Data monitor</a><a href="/pricing"
-						>Pricing</a
-					>
+					<h4>{t('Demo', '데모')}</h4>
+					<a href="/#race">{t('Token race', '토큰 레이스')}</a><a href="/#monitor"
+						>{t('Data monitor', '데이터 모니터')}</a
+					><a href="/pricing">{t('Pricing', '요금')}</a>
 				</div>
 				<div>
-					<h4>Data</h4>
-					<a href="/#features">Why agents</a><a href="/#monitor">Live database</a><a href="/pricing"
-						>Payment routes</a
-					>
+					<h4>{t('Data', '데이터')}</h4>
+					<a href="/#features">{t('Why agents', '왜 에이전트인가')}</a><a href="/#monitor"
+						>{t('Live database', '실시간 데이터베이스')}</a
+					><a href="/pricing">{t('Payment routes', '결제 방식')}</a>
 				</div>
 				<div>
-					<h4>Account</h4>
-					<a href="/account">My account</a><a href="/dashboard">API keys</a>
+					<h4>{t('Account', '계정')}</h4>
+					<a href="/account">{t('My account', '내 계정')}</a><a href="/dashboard"
+						>{t('API keys', 'API 키')}</a
+					>
 				</div>
 			</div>
 		</footer>
-		<p class="copyright">© {year} Agent Catalog. Built for the agent economy.</p>
+		<p class="copyright">
+			© {year} Agent Catalog. {t(
+				'Built for the agent economy.',
+				'에이전트 경제를 위해 만들었습니다.'
+			)}
+		</p>
 	</div>
 </div>
 

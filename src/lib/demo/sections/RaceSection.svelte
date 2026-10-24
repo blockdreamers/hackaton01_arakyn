@@ -3,7 +3,9 @@
 	import Odometer from '#lib/demo/Odometer.svelte';
 	import { demo, scrollToSection } from '#lib/demo/demo-state.svelte.ts';
 	import { onMount, untrack } from 'svelte';
-	import { PRESETS } from '#lib/demo/presets.ts';
+	import GhostSuggest from '#lib/demo/GhostSuggest.svelte';
+	import { md } from '#lib/demo/markdown.ts';
+	import { t } from '#lib/demo/i18n.svelte.ts';
 
 	// Real race: the question goes to /api/agent-search, which runs two Claude agents (web search vs
 	// Agent Catalog on the live DB) and streams their real token usage.
@@ -113,8 +115,10 @@
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	function onEvent(e: any) {
-		if (e.type === 'spec') spec = e.spec;
-		else if (e.type === 'step') {
+		if (e.type === 'spec') {
+			spec = e.spec;
+			publish([...(e.spec.search_terms_ko ?? []), ...(e.spec.search_terms_en ?? [])]);
+		} else if (e.type === 'step') {
 			const l = lanes[e.lane as Lane];
 			// The web agent's server-side searches report usage only when its turn ends, so while
 			// it works we add a rough estimate per search/fetch; exact usage replaces it at the end.
@@ -133,7 +137,7 @@
 				cost: e.costUsd,
 				calls: Math.max(l.calls, e.calls ?? 0),
 				elapsed: e.t,
-				answer: e.aborted ? `Stopped: ${e.aborted}` : e.answer,
+				answer: e.aborted ? `${t('Stopped', '중단됨')}: ${e.aborted}` : e.answer,
 				results: e.results ?? [],
 				verify: e.verify ?? null,
 				paymentUrl: e.paymentUrl ?? null
@@ -150,17 +154,6 @@
 				: label.startsWith('code_execution')
 					? 700
 					: 0;
-
-	// A ready question shown in light grey inside the empty box. Its parts are in our DB and a click
-	// replays a recorded real run (no API cost); it rotates to the next preset each time.
-	let suggestIdx = $state(0);
-	const suggestion = $derived(PRESETS[suggestIdx % PRESETS.length]);
-	function runSuggestion() {
-		const p = suggestion;
-		suggestIdx++;
-		freeText = p.question;
-		start(p.question, { mode: 'preset', presetId: p.id, lanes: ['catalog', 'web'] });
-	}
 
 	async function race(ev: SubmitEvent) {
 		ev.preventDefault();
@@ -182,12 +175,22 @@
 		demo.raceRunning = running;
 	});
 
+	// Hand the search to the rest of the page once: as soon as the spec step has picked the
+	// keywords, so the data monitor looks up exactly what the catalog agent looks up.
+	let published = false;
+	function publish(terms?: string[]) {
+		if (published) return;
+		published = true;
+		demo.lastQuery = { id: Date.now(), label: asked, terms: terms?.length ? terms : undefined };
+	}
+
 	async function start(label: string, body: Record<string, unknown>) {
 		if (running) return;
 		reset();
 		asked = label;
 		running = true;
-		demo.lastQuery = { id: Date.now(), label };
+		published = false;
+		demo.lastResult = null;
 		abort = new AbortController();
 		const started = performance.now();
 		clock = setInterval(() => {
@@ -223,6 +226,17 @@
 			clock = null;
 			running = false;
 			finished = !errorMsg;
+			// no spec came back (error or abort): still let the other boxes run the plain text
+			publish();
+			if (finished)
+				demo.lastResult = {
+					id: Date.now(),
+					label,
+					results: lanes.catalog.results,
+					webTokens: lanes.web.input,
+					catalogTokens: lanes.catalog.input,
+					replayed
+				};
 		}
 	}
 
@@ -232,10 +246,59 @@
 		freeText = '';
 	}
 
+	// First visit: when the search box comes fully into view, dim the page around it and point at
+	// the example query so people actually try it. Once per browser session.
+	const SPOT_KEY = 'agent-catalog-race-spot';
+	let spot = $state(false);
+	let askEl = $state<HTMLFormElement>();
+	function setSpot(on: boolean) {
+		spot = on;
+		// lift this section above the later sections and the dock while the page is dimmed
+		const sec = askEl?.closest('section');
+		if (sec) sec.style.zIndex = on ? '60' : '';
+		if (!on) {
+			try {
+				sessionStorage.setItem(SPOT_KEY, '1');
+			} catch {
+				// shown again next time
+			}
+		}
+	}
+	$effect(() => {
+		if (spot && (running || freeText)) untrack(() => setSpot(false));
+	});
+
 	onMount(() => {
 		demo.raceMounted = true;
 		const chaser = setInterval(chase, 110);
+		let seen = false;
+		try {
+			seen = sessionStorage.getItem(SPOT_KEY) === '1';
+		} catch {
+			// no storage: show it
+		}
+		let io: IntersectionObserver | undefined;
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape' && spot) setSpot(false);
+		};
+		addEventListener('keydown', onKey);
+		if (!seen && askEl && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+			io = new IntersectionObserver(
+				(en) => {
+					const e = en[0];
+					if (e.isIntersecting && !running && !finished && !freeText) {
+						io?.disconnect();
+						setSpot(true);
+					}
+				},
+				{ threshold: 1, rootMargin: '-15% 0px -25% 0px' }
+			);
+			io.observe(askEl);
+		}
 		return () => {
+			io?.disconnect();
+			removeEventListener('keydown', onKey);
+			if (spot) setSpot(false);
 			clearInterval(chaser);
 			demo.raceMounted = false;
 			reset();
@@ -251,99 +314,146 @@
 
 <div class="race">
 	<header class="head">
-		<h1>Search for the part you want to buy</h1>
+		<h1>
+			{t(
+				'Try an agent search for the part you want to buy',
+				'구매하려는 부품을 직접 에이전트로 검색해보세요'
+			)}
+		</h1>
 		<div class="versus">
-			<span class="vs-side web"><i></i>AI Web Search</span>
+			<span class="vs-side web"><i></i>{t('AI Web Search', 'AI 웹 검색')}</span>
 			<span class="vs-mid">vs</span>
 			<span class="vs-side cat"><i></i>Agent Catalog</span>
 		</div>
 	</header>
 
-	<form class="ask" onsubmit={race}>
+	{#if spot}
+		<button
+			type="button"
+			class="spot-dim"
+			aria-label={t('Dismiss', '닫기')}
+			onclick={() => setSpot(false)}
+		></button>
+	{/if}
+	<form class="ask" class:spot bind:this={askEl} onsubmit={race}>
 		<div class="field">
-			<input bind:value={freeText} disabled={running} aria-label="Part request" />
+			<input bind:value={freeText} disabled={running} aria-label={t('Part request', '부품 요청')} />
 			{#if !freeText && !running}
-				<button
-					type="button"
-					class="ghost"
-					onclick={runSuggestion}
-					title="Run this example search (replays a recorded real run)"
-				>
-					<span class="ghost-q">{suggestion.question}</span>
-					<span class="ghost-k">click to search ↵</span>
-				</button>
+				<GhostSuggest
+					onpick={(p) => {
+						freeText = p.question;
+						start(p.question, { mode: 'preset', presetId: p.id, lanes: ['catalog', 'web'] });
+					}}
+				/>
 			{/if}
 		</div>
 		<button class="btn btn-primary" type="submit" disabled={running || !freeText.trim()}>
-			{running ? 'Racing…' : 'Race'}
+			{running ? t('Racing…', '경주 중…') : t('Race', '경주 시작')}
 		</button>
+		{#if spot}
+			<div class="spot-tip" role="dialog" aria-live="polite">
+				<b>{t('Try it: click the example', '눌러보세요: 예시 문장을 클릭')}</b>
+				<span
+					>{t(
+						'Two agents race on the same question. This replays a recorded real run, so it is free.',
+						'두 에이전트가 같은 질문으로 경주합니다. 녹화된 실제 실행을 재생하니 비용이 들지 않습니다.'
+					)}</span
+				>
+				<button type="button" class="spot-skip" onclick={() => setSpot(false)}
+					>{t('Skip', '건너뛰기')}</button
+				>
+			</div>
+		{/if}
 	</form>
 	<p class="hint">
-		Two real Claude agents get your exact words and the same model. Only the tools differ. A live
-		race costs about $0.3–1 in API usage.
+		{t(
+			'See for yourself how speed and token use differ when an AI agent browses the web versus searches products in Agent Catalog.',
+			'AI 에이전트가 일반적인 웹 브라우징으로 검색할 때와 Agent Catalog에서 제품을 검색할 때의 속도와 토큰 사용량 차이를 직접 경험해보세요.'
+		)}
 	</p>
 
 	{#if errorMsg}
-		<div class="missing"><b>Search failed.</b> {errorMsg}</div>
+		<div class="missing"><b>{t('Search failed.', '검색에 실패했습니다.')}</b> {errorMsg}</div>
 	{/if}
 	{#if !running && !finished}
 		<div class="split idle" aria-hidden="true">
-			<div class="mult wait"><span class="mv">?×</span><span class="ml">token gap</span></div>
+			<div class="mult wait">
+				<span class="mv">?×</span><span class="ml">{t('token gap', '토큰 격차')}</span>
+			</div>
 			{#each ['web', 'catalog'] as const as lane (lane)}
 				<section class="lane {lane}">
-					<h2>{lane === 'web' ? 'AI Web Search' : 'Agent Catalog'}</h2>
+					<h2>{lane === 'web' ? t('AI Web Search', 'AI 웹 검색') : 'Agent Catalog'}</h2>
 					<div class="tok">
-						<div class="k">Input tokens</div>
+						<div class="k">{t('Input tokens', '입력 토큰')}</div>
 						<div class="tokv plain">0</div>
 					</div>
 					<p class="idle-note">
 						{lane === 'web'
-							? 'Searches shops and opens product pages itself'
-							: 'Asks the Agent Catalog index on the live DB'}
+							? t(
+									'Searches shops and opens product pages itself',
+									'쇼핑몰을 검색하고 상품 페이지를 직접 엽니다'
+								)
+							: t(
+									'Asks the Agent Catalog index on the live DB',
+									'실시간 DB 위의 Agent Catalog 인덱스에 질의합니다'
+								)}
 					</p>
 				</section>
 			{/each}
 		</div>
-		<p class="hint">Ask above, or use the search box at the bottom right. Both run here.</p>
+		<p class="hint">
+			{t(
+				'Ask above, or use the search box at the bottom right. Both run here.',
+				'위에서 물어보거나 우측 하단 검색창을 이용하세요. 어느 쪽이든 여기서 실행됩니다.'
+			)}
+		</p>
 	{/if}
 	{#if running || finished}
 		<div class="asked">
-			{#if finished}<button class="clear" type="button" onclick={clearAll}>New search</button>{/if}
+			{#if finished}<button class="clear" type="button" onclick={clearAll}
+					>{t('New search', '새 검색')}</button
+				>{/if}
 		</div>
 		{#if spec}
 			<div class="spec">
 				<div class="spec-main">
-					<span class="k">Understood as</span>
+					<span class="k">{t('Understood as', '이렇게 이해했어요')}</span>
 					<p class="sum">{spec.summary ?? asked}</p>
 					<div class="fields">
-						{#if spec.category}<span><em>category</em>{spec.category}</span>{/if}
-						{#if spec.qty}<span><em>qty</em>{spec.qty.toLocaleString()}</span>{/if}
+						{#if spec.category}<span><em>{t('category', '분류')}</em>{spec.category}</span>{/if}
+						{#if spec.qty}<span><em>{t('qty', '수량')}</em>{spec.qty.toLocaleString()}</span>{/if}
 						{#if spec.max_unit_price}<span
-								><em>max / pc</em>{spec.max_unit_price.toLocaleString()}
+								><em>{t('max / pc', '개당 최대')}</em>{spec.max_unit_price.toLocaleString()}
 								{spec.currency ?? ''}</span
 							>{/if}
 						{#each spec.attributes ?? [] as at, i (i)}<span><em>{at.field}</em>{at.value}</span
 							>{/each}
 					</div>
 					<div class="terms">
-						<em>searching for</em>
-						{#each showTerms ? terms : terms.slice(0, 3) as t, i (i)}<span class="chip">{t}</span
+						<em>{t('searching for', '검색어')}</em>
+						{#each showTerms ? terms : terms.slice(0, 3) as term, i (i)}<span class="chip"
+								>{term}</span
 							>{/each}
 						{#if terms.length > 3}<button
 								type="button"
 								class="more"
 								onclick={() => (showTerms = !showTerms)}
-								>{showTerms ? 'less' : `+${terms.length - 3}`}</button
+								>{showTerms ? t('less', '접기') : `+${terms.length - 3}`}</button
 							>{/if}
 					</div>
 				</div>
 				{#if spec.ambiguities?.length}
 					<div class="spec-q">
-						<span class="k">Would sharpen the search</span>
+						<span class="k">{t('Would sharpen the search', '알려주시면 더 정확해져요')}</span>
 						<ol>
 							{#each spec.ambiguities.slice(0, 3) as q, i (i)}<li>{q}</li>{/each}
 						</ol>
-						<span class="note">The agents continue with their best guess.</span>
+						<span class="note"
+							>{t(
+								'The agents continue with their best guess.',
+								'에이전트는 가장 그럴듯한 추정으로 계속 진행합니다.'
+							)}</span
+						>
 					</div>
 				{/if}
 			</div>
@@ -358,25 +468,38 @@
 							duration={finished ? 1400 : 600}
 						/>{:else}…{/if}</span
 				>
-				<span class="ml">{finished ? 'more tokens browsing the web' : 'web ÷ catalog tokens'}</span>
+				<span class="ml"
+					>{finished
+						? t('more tokens browsing the web', '웹 브라우징 시 토큰 배수')
+						: t('web ÷ catalog tokens', '웹 ÷ 카탈로그 토큰')}</span
+				>
 			</div>
 			{#each ['web', 'catalog'] as const as lane (lane)}
 				{@const l = lanes[lane]}
 				<section class="lane {lane}">
 					<h2>
-						{lane === 'web' ? 'AI Web Search' : 'Agent Catalog'}
-						<span class="badge">{lane === 'web' ? 'web_search · web_fetch' : 'live DB · x402'}</span
+						{lane === 'web' ? t('AI Web Search', 'AI 웹 검색') : 'Agent Catalog'}
+						<span class="badge"
+							>{lane === 'web'
+								? 'web_search · web_fetch'
+								: t('live DB · x402', '실시간 DB · x402')}</span
 						>
 					</h2>
 					<div class="tok">
-						<div class="k">Cumulative input tokens</div>
+						<div class="k">{t('Cumulative input tokens', '누적 입력 토큰')}</div>
 						<div class="tokv"><Odometer value={shown[lane]} duration={700} /></div>
 					</div>
 					<div class="kv">
-						<div><span class="k">Tool calls</span><span class="v">{l.calls}</span></div>
-						<div><span class="k">Elapsed</span><span class="v">{l.elapsed.toFixed(1)}s</span></div>
 						<div>
-							<span class="k">Cost</span>
+							<span class="k">{t('Tool calls', '도구 호출')}</span><span class="v">{l.calls}</span>
+						</div>
+						<div>
+							<span class="k">{t('Elapsed', '경과 시간')}</span><span class="v"
+								>{l.elapsed.toFixed(1)}s</span
+							>
+						</div>
+						<div>
+							<span class="k">{t('Cost', '비용')}</span>
 							<span class="v">{l.done ? usd(l.cost) : '…'}</span>
 						</div>
 					</div>
@@ -386,7 +509,9 @@
 								<span class="t">{e.t.toFixed(1)}s</span>
 								<span class="msg"
 									>{e.label}{#if e.url}
-										<a href={e.url} target="_blank" rel="noreferrer">view tx ↗</a>{/if}</span
+										<a href={e.url} target="_blank" rel="noreferrer"
+											>{t('view tx ↗', '거래 보기 ↗')}</a
+										>{/if}</span
 								>
 								<span class="d">{e.inputTokens ? '+' + e.inputTokens.toLocaleString() : ''}</span>
 							</li>
@@ -396,8 +521,8 @@
 						<div class="answer">
 							{#if lane === 'catalog' && l.results.length}
 								<b
-									>Delivered results {#if l.verify}<span class="badge {l.verify}">{l.verify}</span
-										>{/if}</b
+									>{t('Delivered results', '전달된 결과')}
+									{#if l.verify}<span class="badge {l.verify}">{l.verify}</span>{/if}</b
 								>
 								<ol class="results">
 									{#each l.results as r, i (i)}
@@ -411,11 +536,16 @@
 										class="paylink"
 										href={l.paymentUrl}
 										target="_blank"
-										rel="noreferrer">0.02 USDC paid on Base Sepolia ↗</a
+										rel="noreferrer"
+										>{t(
+											'0.02 USDC paid on Base Sepolia ↗',
+											'Base Sepolia에서 0.02 USDC 결제 완료 ↗'
+										)}</a
 									>{/if}
 							{:else}
-								<b>Agent answer</b>
-								<p class="ans">{l.answer}</p>
+								<b>{t('Agent answer', '에이전트 답변')}</b>
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -- md() escapes all HTML -->
+								<div class="ans md">{@html md(l.answer)}</div>
 							{/if}
 						</div>
 					{/if}
@@ -424,7 +554,11 @@
 		</div>
 
 		<div class="ratiobar" class:live={running} style:--heat={heat}>
-			<span class="rl">{finished ? 'Web search used' : 'Web search is using'}</span>
+			<span class="rl"
+				>{finished
+					? t('Web search used', '웹 검색은')
+					: t('Web search is using', '웹 검색이 지금')}</span
+			>
 			<span class="rv">
 				{#if ratio > 0}<Odometer
 						value={ratioShown}
@@ -433,7 +567,11 @@
 						duration={running ? 700 : 1600}
 					/>{:else}–{/if}
 			</span>
-			<span class="rl">more tokens</span>
+			<span class="rl"
+				>{finished
+					? t('more tokens', '더 많은 토큰을 썼습니다')
+					: t('more tokens', '더 많은 토큰을 쓰는 중')}</span
+			>
 			<div class="meter" aria-hidden="true">
 				<i style:width={`${Math.max(2, heat * 100)}%`}></i>
 				<span style:left="0%">1×</span><span style:left="40.4%">10×</span><span style:left="80.7%"
@@ -442,12 +580,13 @@
 			</div>
 			{#if finished}
 				<span class="note">
-					{lanes.web.input.toLocaleString()} vs {lanes.catalog.input.toLocaleString()} input tokens ·
+					{lanes.web.input.toLocaleString()} vs {lanes.catalog.input.toLocaleString()}
+					{t('input tokens', '입력 토큰')} ·
 					{usd(lanes.web.cost)} vs {usd(lanes.catalog.cost)}{#if replayed}
-						· replay of a recorded run{/if}
+						· {t('replay of a recorded run', '녹화된 실행 재생')}{/if}
 				</span>
 				<button class="btn btn-primary" type="button" onclick={() => scrollToSection('monitor')}
-					>See it in the data monitor ↓</button
+					>{t('See it in the data monitor ↓', '데이터 모니터에서 보기 ↓')}</button
 				>
 			{/if}
 		</div>
@@ -530,51 +669,107 @@
 		border: 1px solid var(--brand-line);
 		box-shadow: 0 20px 50px -28px rgba(31, 75, 255, 0.8);
 	}
+	/* first-visit spotlight */
+	.spot-dim {
+		position: fixed;
+		inset: 0;
+		z-index: 1;
+		border: 0;
+		padding: 0;
+		background: rgba(2, 4, 12, 0.78);
+		backdrop-filter: blur(2px);
+		cursor: default;
+		animation: spot-in 0.45s ease-out;
+	}
+	.ask.spot {
+		position: relative;
+		z-index: 2;
+		box-shadow:
+			0 0 0 4px rgba(61, 107, 255, 0.35),
+			0 0 70px 6px rgba(61, 107, 255, 0.55);
+		animation: spot-in 0.45s ease-out;
+	}
+	.ask.spot :global(.ghost-q) {
+		color: var(--ink);
+	}
+	.ask.spot :global(.ghost-k) {
+		opacity: 1;
+		color: #fff;
+		background: var(--brand);
+		border-color: var(--brand-2);
+		animation: spot-ring 1.6s ease-out infinite;
+	}
+	.spot-tip {
+		position: absolute;
+		top: calc(100% + 18px);
+		left: 20px;
+		max-width: 420px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 14px 16px 12px;
+		border-radius: 14px;
+		background: #fff;
+		color: #111827;
+		font-size: 13.5px;
+		line-height: 1.45;
+		text-align: left;
+		box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.6);
+		animation: tip-in 0.5s 0.2s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+	}
+	.spot-tip::before {
+		content: '';
+		position: absolute;
+		top: -7px;
+		left: 36px;
+		width: 14px;
+		height: 14px;
+		background: #fff;
+		transform: rotate(45deg);
+	}
+	.spot-tip b {
+		font-size: 15px;
+		color: var(--brand);
+	}
+	.spot-tip span {
+		color: #4b5563;
+	}
+	.spot-skip {
+		align-self: flex-end;
+		border: 0;
+		background: none;
+		color: #6b7280;
+		font: 600 12px var(--font);
+		cursor: pointer;
+		padding: 2px 0 0;
+	}
+	.spot-skip:hover {
+		color: #111827;
+	}
+	@keyframes spot-in {
+		from {
+			opacity: 0;
+		}
+	}
+	@keyframes tip-in {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+	}
+	@keyframes spot-ring {
+		0% {
+			box-shadow: 0 0 0 0 rgba(61, 107, 255, 0.7);
+		}
+		100% {
+			box-shadow: 0 0 0 12px rgba(61, 107, 255, 0);
+		}
+	}
 	.field {
 		position: relative;
 		flex: 1;
 		min-width: 0;
 		display: flex;
-	}
-	.ghost {
-		position: absolute;
-		left: 0;
-		top: 50%;
-		transform: translateY(-50%);
-		max-width: 100%;
-		display: inline-flex;
-		align-items: center;
-		gap: 10px;
-		padding: 0;
-		border: 0;
-		background: none;
-		font: 16px var(--font);
-		color: var(--muted-2);
-		cursor: pointer;
-		text-align: left;
-	}
-	.ghost-q {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		min-width: 0;
-		transition: color 0.15s;
-	}
-	.ghost-k {
-		flex: none;
-		font: 600 11px var(--mono);
-		color: var(--brand-2);
-		padding: 3px 8px;
-		border-radius: 999px;
-		border: 1px solid var(--line-strong);
-		opacity: 0.8;
-		transition: opacity 0.15s;
-	}
-	.ghost:hover .ghost-q {
-		color: var(--ink);
-	}
-	.ghost:hover .ghost-k {
-		opacity: 1;
 	}
 	.ask input {
 		flex: 1;
@@ -1011,12 +1206,90 @@
 	.ans {
 		margin-top: 6px;
 		font-size: 13.5px;
-		line-height: 1.55;
+		line-height: 1.6;
 		color: var(--muted);
-		white-space: pre-wrap;
-		max-height: 220px;
+		max-height: 360px;
 		overflow: auto;
 	}
+	/* rendered markdown in agent answers */
+	.md :global(p) {
+		margin: 0 0 8px;
+	}
+	.md :global(h3),
+	.md :global(h4),
+	.md :global(h5),
+	.md :global(h6) {
+		margin: 10px 0 6px;
+		font-size: 1.02em;
+		color: var(--ink);
+	}
+	.md :global(strong) {
+		color: var(--ink);
+	}
+	.md :global(ul),
+	.md :global(ol) {
+		margin: 0 0 8px;
+		padding-left: 18px;
+	}
+	.md :global(li) {
+		margin: 2px 0;
+	}
+	.md :global(a) {
+		color: #8fabff;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		overflow-wrap: anywhere;
+	}
+	.md :global(code) {
+		font: 0.92em var(--mono);
+		padding: 1px 5px;
+		border-radius: 4px;
+		background: rgba(255, 255, 255, 0.04);
+	}
+	.md :global(pre) {
+		margin: 0 0 8px;
+		padding: 10px;
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.04);
+		overflow: auto;
+	}
+	.md :global(pre code) {
+		padding: 0;
+		background: none;
+	}
+	.md :global(hr) {
+		border: 0;
+		border-top: 1px solid var(--line);
+		margin: 10px 0;
+	}
+	.md :global(.md-table) {
+		overflow-x: auto;
+		margin: 4px 0 10px;
+		border: 1px solid var(--line);
+		border-radius: 10px;
+	}
+	.md :global(table) {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.94em;
+	}
+	.md :global(th) {
+		text-align: left;
+		font-weight: 600;
+		color: var(--ink);
+		background: rgba(255, 255, 255, 0.04);
+		white-space: nowrap;
+	}
+	.md :global(th),
+	.md :global(td) {
+		padding: 7px 10px;
+		border-bottom: 1px solid var(--line);
+		vertical-align: top;
+	}
+	.md :global(tr:last-child td) {
+		border-bottom: 0;
+	}
+
 	.badge.pass {
 		color: var(--accent);
 		border-color: var(--accent);

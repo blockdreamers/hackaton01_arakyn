@@ -1,5 +1,6 @@
 <script lang="ts">
 	import GoogleSignIn from '#lib/GoogleSignIn.svelte';
+	import { t } from '#lib/demo/i18n.svelte.ts';
 
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 	let dialog = $state<HTMLDialogElement>();
@@ -20,16 +21,25 @@
 	}}
 >
 	<div class="box">
-		<button class="x" type="button" aria-label="Close" onclick={() => (open = false)}>×</button>
+		<button class="x" type="button" aria-label={t('Close', '닫기')} onclick={() => (open = false)}
+			>×</button
+		>
 		<img src="/brand/logo-white.png" alt="Agent Catalog" width="168" height="28" />
-		<h2>Sign in to Agent Catalog</h2>
-		<p>Get an API key, connect an agent wallet and see every call your agents make.</p>
+		<h2>{t('Sign in to Agent Catalog', 'Agent Catalog에 로그인')}</h2>
+		<p>
+			{t(
+				'Get an API key, connect an agent wallet and see every call your agents make.',
+				'API 키를 발급받고, 에이전트 지갑을 연결하고, 에이전트의 모든 호출을 확인하세요.'
+			)}
+		</p>
 		{#if open}
 			<div class="gsi"><GoogleSignIn next="/account" /></div>
 		{/if}
 		<ul>
-			<li>Free quota: 1,000 calls / month (example)</li>
-			<li>No account needed for wallet + x402 calls</li>
+			<li>{t('Free quota: 1,000 calls / month (example)', '무료 한도: 월 1,000회 (예시)')}</li>
+			<li>
+				{t('No account needed for wallet + x402 calls', '지갑 + x402 호출은 계정 없이 사용 가능')}
+			</li>
 		</ul>
 	</div>
 </dialog>

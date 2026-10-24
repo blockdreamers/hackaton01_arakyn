@@ -5,6 +5,7 @@
 	// illustrative (80,000 tokens per page, ~1,000 per catalog lookup, as in the slides above);
 	// the token race below shows real runs.
 	import { onMount } from 'svelte';
+	import { t } from './i18n.svelte.ts';
 
 	const fav = (d: string) => `https://www.google.com/s2/favicons?domain=${d}&sz=64`;
 
@@ -205,30 +206,35 @@
 	<article class="card before">
 		<header class="ch">
 			<div>
-				<span class="tag">Today</span>
-				<h3>Your agent browses every shop itself</h3>
+				<span class="tag">{t('Today', '지금은')}</span>
+				<h3>
+					{t('Your agent browses every shop itself', '에이전트가 모든 쇼핑몰을 직접 돌아다닙니다')}
+				</h3>
 			</div>
 			<div class="stats">
-				<span class="stat"><i>time</i><b>{bTime.toFixed(1)}s</b></span>
-				<span class="stat"><i>tokens</i><b>{fmt(bTokens)}</b></span>
+				<span class="stat"><i>{t('time', '시간')}</i><b>{bTime.toFixed(1)}s</b></span>
+				<span class="stat"><i>{t('tokens', '토큰')}</i><b>{fmt(bTokens)}</b></span>
 			</div>
 		</header>
 		<svg
 			viewBox="0 0 600 420"
 			class="dia"
 			role="img"
-			aria-label="Agent visiting many websites one by one"
+			aria-label={t(
+				'Agent visiting many websites one by one',
+				'에이전트가 여러 웹사이트를 하나씩 방문하는 모습'
+			)}
 		>
 			<!-- user -> agent -->
 			<g class="node user">
 				<rect x="262" y="14" width="76" height="30" rx="15" />
-				<text x="300" y="34">User</text>
+				<text x="300" y="34">{t('User', '사용자')}</text>
 			</g>
 			<path bind:this={bUser} class="edge" d="M300 44 L300 92" />
 			<path class="arrow" d="M294 86 L300 94 L306 86" />
 			<g class="node agent" class:done={bDone}>
 				<circle cx="300" cy="128" r="32" />
-				<text x="300" y="133">Agent</text>
+				<text x="300" y="133">{t('Agent', '에이전트')}</text>
 			</g>
 
 			<!-- agent -> every site -->
@@ -246,17 +252,30 @@
 					<image href={fav(s.d)} x={WX(i) - 11} y={WY - 11} width="22" height="22" />
 					<text x={WX(i)} y={WY + 42}>{s.name}</text>
 					{#if bSite === i}
-						<text class="reading" x={WX(i)} y={WY - 34}>reading page…</text>
+						<text class="reading" x={WX(i)} y={WY - 34}
+							>{t('reading page…', '페이지 읽는 중…')}</text
+						>
 					{/if}
 				</g>
 			{/each}
-			<text class="etc" x="300" y="414">… and every other site the agent can think of</text>
+			<text class="etc" x="300" y="414"
+				>{t(
+					'… and every other site the agent can think of',
+					'… 그 밖에 에이전트가 떠올릴 수 있는 모든 사이트'
+				)}</text
+			>
 
 			{#if bDot}<circle class="dot web" cx={bDot.x} cy={bDot.y} r="6" />{/if}
 		</svg>
 		<footer class="cf">
-			<span class="pt bad"><b>Slow</b> one site at a time, back and forth</span>
-			<span class="pt bad"><b>Token-heavy</b> ~80,000 tokens of HTML per page</span>
+			<span class="pt bad"
+				><b>{t('Slow', '느림')}</b>
+				{t('one site at a time, back and forth', '사이트를 하나씩, 왔다 갔다')}</span
+			>
+			<span class="pt bad"
+				><b>{t('Token-heavy', '토큰 과다')}</b>
+				{t('~80,000 tokens of HTML per page', '페이지마다 HTML 약 80,000토큰')}</span
+			>
 		</footer>
 	</article>
 
@@ -264,19 +283,24 @@
 	<article class="card after">
 		<header class="ch">
 			<div>
-				<span class="tag">With Agent Catalog</span>
-				<h3>Your agent looks it up in one call</h3>
+				<span class="tag">{t('With Agent Catalog', 'Agent Catalog를 쓰면')}</span>
+				<h3>
+					{t('Your agent looks it up in one call', '에이전트가 한 번의 호출로 바로 찾습니다')}
+				</h3>
 			</div>
 			<div class="stats">
-				<span class="stat"><i>time</i><b>{aTime.toFixed(1)}s</b></span>
-				<span class="stat"><i>tokens</i><b>{fmt(aTokens)}</b></span>
+				<span class="stat"><i>{t('time', '시간')}</i><b>{aTime.toFixed(1)}s</b></span>
+				<span class="stat"><i>{t('tokens', '토큰')}</i><b>{fmt(aTokens)}</b></span>
 			</div>
 		</header>
 		<svg
 			viewBox="0 0 600 420"
 			class="dia"
 			role="img"
-			aria-label="Crawlers fill a database; the agent queries it once"
+			aria-label={t(
+				'Crawlers fill a database; the agent queries it once',
+				'크롤러가 DB를 채우고, 에이전트는 한 번만 조회합니다'
+			)}
 		>
 			<defs>
 				<linearGradient id="fc-db" x1="0" y1="0" x2="0" y2="1">
@@ -305,20 +329,22 @@
 			/>
 			<g class="node crawler">
 				<rect x={CRAWL.x - 58} y={CRAWL.y - 30} width="116" height="60" rx="12" />
-				<text x={CRAWL.x} y={CRAWL.y - 3}>Bot &amp; agent</text>
-				<text class="sub" x={CRAWL.x} y={CRAWL.y + 15}>scrape · normalize</text>
+				<text x={CRAWL.x} y={CRAWL.y - 3}>{t('Bot & agent', '수집 에이전트')}</text>
+				<text class="sub" x={CRAWL.x} y={CRAWL.y + 15}
+					>{t('scrape · normalize', '수집 · 정규화')}</text
+				>
 			</g>
 			<g class="db" class:hit={aHit}>
 				<path d={`M${DB.x - 40} ${DB.y - 26} v52 a40 11 0 0 0 80 0 v-52`} fill="url(#fc-db)" />
 				<ellipse cx={DB.x} cy={DB.y - 26} rx="40" ry="11" class="lid" />
 				<text x={DB.x} y={DB.y + 10}>DB</text>
-				<text class="db-l" x={DB.x} y={DB.y + 60}>always fresh</text>
+				<text class="db-l" x={DB.x} y={DB.y + 60}>{t('always fresh', '항상 최신 상태')}</text>
 			</g>
 
 			<!-- user -> agent, agent <-> DB -->
 			<g class="node user">
 				<rect x={AG.x - 38} y="14" width="76" height="30" rx="15" />
-				<text x={AG.x} y="34">User</text>
+				<text x={AG.x} y="34">{t('User', '사용자')}</text>
 			</g>
 			<path bind:this={aUser} class="edge" d={`M${AG.x} 44 L${AG.x} ${AG.y - 34}`} />
 			<path
@@ -333,7 +359,7 @@
 			/>
 			<g class="node agent" class:done={aDone}>
 				<circle cx={AG.x} cy={AG.y} r="30" />
-				<text x={AG.x} y={AG.y + 5}>Agent</text>
+				<text x={AG.x} y={AG.y + 5}>{t('Agent', '에이전트')}</text>
 			</g>
 
 			<!-- data streaming in along the solid lines, all the time -->
@@ -356,11 +382,22 @@
 			{#if aDot}<circle class="dot cat" cx={aDot.x} cy={aDot.y} r="6" />{/if}
 		</svg>
 		<footer class="cf">
-			<span class="pt good"><b>Faster</b> the shops are read ahead of time</span>
-			<span class="pt good"><b>Fewer tokens</b> ~1,000 tokens of clean rows</span>
+			<span class="pt good"
+				><b>{t('Faster', '더 빠르게')}</b>
+				{t('the shops are read ahead of time', '쇼핑몰은 미리 읽어둡니다')}</span
+			>
+			<span class="pt good"
+				><b>{t('Fewer tokens', '더 적은 토큰')}</b>
+				{t('~1,000 tokens of clean rows', '정리된 데이터 약 1,000토큰')}</span
+			>
 		</footer>
 	</article>
-	<p class="note">Illustrative timing. The token race below runs both for real.</p>
+	<p class="note">
+		{t(
+			'Illustrative timing. The token race below runs both for real.',
+			'시간은 예시입니다. 아래 토큰 레이스에서 두 방식을 실제로 돌려볼 수 있습니다.'
+		)}
+	</p>
 </div>
 
 <style>

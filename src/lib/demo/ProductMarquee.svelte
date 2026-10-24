@@ -1,6 +1,8 @@
 <script lang="ts">
 	// ~300 real products from the live DB rolling past in three lanes. Hover pauses a lane;
 	// every card links to the product page on its source site.
+	import { t } from '#lib/demo/i18n.svelte.ts';
+
 	interface Item {
 		id: number;
 		name: string;
@@ -36,14 +38,17 @@
 		})}${SYMBOL[it.currency] ? '' : ' ' + it.currency}`;
 </script>
 
-<section class="showcase" class:embedded aria-label="Products in the index">
+<section class="showcase" class:embedded aria-label={t('Products in the index', '인덱스의 상품')}>
 	{#if !embedded}<div class="head">
-		<p>
-			{items.length
-				? `${items.length} real products, sampled across every source`
-				: 'Loading products…'}
-		</p>
-	</div>
+			<p>
+				{items.length
+					? t(
+							`${items.length} real products, sampled across every source`,
+							`모든 출처에서 고른 실제 상품 ${items.length}개`
+						)
+					: t('Loading products…', '상품을 불러오는 중…')}
+			</p>
+		</div>
 	{/if}
 	<div class="box">
 		{#each lanes as lane, li (li)}

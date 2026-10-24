@@ -1,12 +1,14 @@
 <script lang="ts">
 	// Header for pages other than the home hero (pricing, account).
 	import { page } from '$app/state';
+	import LangToggle from './LangToggle.svelte';
+	import { t } from './i18n.svelte.ts';
 
-	const LINKS = [
-		['/#race', 'Token race'],
-		['/#monitor', 'Data monitor'],
-		['/pricing', 'Pricing']
-	];
+	const LINKS = $derived([
+		['/#race', t('Token race', '토큰 레이스')],
+		['/#monitor', t('Data monitor', '데이터 모니터')],
+		['/pricing', t('Pricing', '요금')]
+	]);
 </script>
 
 <nav class="top">
@@ -18,9 +20,12 @@
 			<a {href} aria-current={page.url.pathname === href ? 'page' : undefined}>{label}</a>
 		{/each}
 	</div>
-	<a class="cta" href={page.data.user ? '/account' : '/?login=1'}
-		>{page.data.user ? 'My account' : 'Log in'}</a
-	>
+	<div class="right">
+		<LangToggle />
+		<a class="cta" href={page.data.user ? '/account' : '/?login=1'}
+			>{page.data.user ? t('My account', '내 계정') : t('Log in', '로그인')}</a
+		>
+	</div>
 </nav>
 
 <style>
@@ -55,7 +60,13 @@
 	.links a[aria-current='page'] {
 		box-shadow: 0 2px 0 var(--brand-2);
 	}
+	.right {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
 	.cta {
+		white-space: nowrap;
 		font-size: 14px;
 		font-weight: 500;
 		padding: 9px 18px;
@@ -68,6 +79,12 @@
 	@media (max-width: 640px) {
 		.links {
 			display: none;
+		}
+		.right {
+			gap: 8px;
+		}
+		.cta {
+			padding: 8px 12px;
 		}
 	}
 </style>

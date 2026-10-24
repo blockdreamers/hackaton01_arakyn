@@ -10,6 +10,8 @@
 	import SearchDock from '#lib/demo/SearchDock.svelte';
 	import IntroCarousel from '#lib/demo/IntroCarousel.svelte';
 	import FlowCompare from '#lib/demo/FlowCompare.svelte';
+	import LangToggle from '#lib/demo/LangToggle.svelte';
+	import { i18n, t } from '#lib/demo/i18n.svelte.ts';
 
 	// Login popup; /account sends signed-out visitors here with ?login=1.
 	let loginOpen = $state(page.url.searchParams.get('login') === '1');
@@ -55,10 +57,15 @@
 </script>
 
 <svelte:head>
-	<title>Agent Catalog · Source Smarter, Not Harder</title>
+	<title
+		>{t('Agent Catalog · Source Smarter, Not Harder', 'Agent Catalog · 더 똑똑한 부품 소싱')}</title
+	>
 	<meta
 		name="description"
-		content="A catalog of buyable, standardized parts that AI agents can read, verify and pay for."
+		content={t(
+			'A catalog of buyable, standardized parts that AI agents can read, verify and pay for.',
+			'AI 에이전트가 읽고, 검증하고, 바로 결제할 수 있는 표준 부품 카탈로그.'
+		)}
 	/>
 </svelte:head>
 
@@ -121,60 +128,85 @@
 					><img src="/brand/logo-white.png" alt="Agent Catalog" width="168" height="28" /></a
 				>
 				<div class="nav-links">
-					{#each [['#race', 'Token race'], ['#monitor', 'Data monitor'], ['/pricing', 'Pricing']] as [href, label] (href)}
+					{#each [['#race', t('Token race', '토큰 레이스')], ['#monitor', t('Data monitor', '데이터 모니터')], ['/pricing', t('Pricing', '요금제')]] as [href, label] (href)}
 						<a class="roll-host" {href}>{@render roll(label)}</a>
 					{/each}
 				</div>
 				<div class="auth">
+					<LangToggle />
 					{#if page.data.user}
-						<a class="roll-host nav-cta" href="/account">{@render roll('My account')}</a>
+						<a class="roll-host nav-cta" href="/account"
+							>{@render roll(t('My account', '내 계정'))}</a
+						>
 					{:else}
 						<button class="roll-host login" type="button" onclick={() => (loginOpen = true)}
-							>{@render roll('Log in')}</button
+							>{@render roll(t('Log in', '로그인'))}</button
 						>
 						<button class="roll-host nav-cta" type="button" onclick={() => (loginOpen = true)}
-							>{@render roll('Get API key')}</button
+							>{@render roll(t('Get API key', 'API 키 발급'))}</button
 						>
 					{/if}
 				</div>
 			</nav>
 			<div class="hero-main">
-				<div class="pill"><span class="dot"></span>Domain-specific search engine for AI agents</div>
-				<h1 class="hero-title">The Search Engine<br />Built for Agents</h1>
+				<div class="pill">
+					<span class="dot"></span>{t(
+						'Domain-specific search engine for AI agents',
+						'AI 에이전트를 위한 도메인 특화 검색엔진'
+					)}
+				</div>
+				<h1 class="hero-title">
+					{#if i18n.lang === 'ko'}에이전트를 위해 만든<br />검색엔진{:else}The Search Engine<br
+						/>Built for Agents{/if}
+				</h1>
 				<p class="hero-sub">
-					Not a web search with a chatbot on top. A purpose-built index of real, buyable parts that
-					agents query directly.
+					{t(
+						'A domain-specific search engine for faster, token-efficient agent search.',
+						'더 빠르고 토큰 효율적인 에이전트 검색을 위한 도메인 특화 검색엔진.'
+					)}
 				</p>
 				<div class="keys">
 					<div class="key">
 						<span class="key-ic">{@render icon('bolt')}</span>
 						<span class="key-t"
-							><b>Faster</b>One structured lookup instead of browsing page after page</span
+							><b>{t('Faster', '더 빠르게')}</b>{t(
+								'One structured lookup instead of browsing page after page',
+								'페이지를 하나씩 둘러보는 대신, 한 번의 구조화된 조회'
+							)}</span
 						>
 					</div>
 					<div class="key">
 						<span class="key-ic">{@render icon('analytics')}</span>
 						<span class="key-t"
-							><b>Fewer tokens</b>Clean rows, not raw HTML, so the agent reads a fraction</span
+							><b>{t('Fewer tokens', '더 적은 토큰')}</b>{t(
+								'Clean rows, not raw HTML, so the agent reads a fraction',
+								'원본 HTML 대신 정리된 데이터만 읽어 토큰 소모가 훨씬 적습니다'
+							)}</span
 						>
 					</div>
 				</div>
 				<div class="hero-actions">
-					<a class="roll-host cta-primary" href="#race">{@render roll('Try a live search')}</a>
+					<a class="roll-host cta-primary" href="#race"
+						>{@render roll(t('Try a live search', '실시간 검색 해보기'))}</a
+					>
 					<a class="roll-host cta-secondary" href="#monitor"
-						>{@render roll('See the data monitor')} {@render icon('arrow')}</a
+						>{@render roll(t('See the data monitor', '데이터 모니터 보기'))}
+						{@render icon('arrow')}</a
 					>
 				</div>
 				<div class="counters">
 					<div class="counter">
 						<span class="cv"><RollingNumber value={live.products} /></span>
 						<span class="cl"
-							>products indexed · {live.sites} {live.sites === 1 ? 'source' : 'sources'}</span
+							>{t(
+								`products indexed · ${live.sites} ${live.sites === 1 ? 'source' : 'sources'}`,
+								`수집한 상품 · 소스 ${live.sites}곳`
+							)}</span
 						>
 					</div>
 					<div class="counter">
 						<span class="cv"><RollingNumber value={live.searches} delay={150} /></span>
-						<span class="cl">agent searches served</span>
+						<span class="cl">{t('agent searches served', '처리한 에이전트 검색')}</span>
 					</div>
 				</div>
 			</div>
@@ -182,15 +214,31 @@
 	</header>
 
 	<section class="features" id="features">
-		<div class="section-head compact">
-			<h2>Web search is built for people. This is built for agents.</h2>
+		<div class="section-head compact wide">
+			<!-- fixed line breaks, one phrase per line -->
+			<h2>
+				<span class="line"
+					>{t('Web search is built for people.', '웹 검색은 사람을 위한 검색이지만')}</span
+				>
+				<span class="line"
+					>{t('Agent Catalog is a domain-specific', 'Agent Catalog는 에이전트를 위한')}</span
+				>
+				<span class="line"
+					>{t('search engine built for agents.', '도메인 특화 검색엔진입니다.')}</span
+				>
+			</h2>
 		</div>
 		<IntroCarousel />
 	</section>
 
 	<section class="features flow-sec" id="how">
 		<div class="section-head compact">
-			<h2>Agents shouldn't browse. They should look it up.</h2>
+			<h2>
+				{t(
+					"Agents shouldn't browse. They should look it up.",
+					'에이전트는 둘러보지 않고, 바로 찾아야 합니다.'
+				)}
+			</h2>
 		</div>
 		<FlowCompare />
 	</section>
@@ -201,7 +249,12 @@
 
 	<section class="demo-section" id="monitor">
 		<div class="demo-head">
-			<h2>What happens inside the index when an agent searches</h2>
+			<h2>
+				{t(
+					'What happens inside the index when an agent searches',
+					'에이전트가 검색할 때 인덱스 안에서 일어나는 일'
+				)}
+			</h2>
 		</div>
 		<MonitorSection />
 	</section>
@@ -240,6 +293,12 @@
 	}
 	.flow-sec {
 		padding-top: 0;
+	}
+	.section-head.wide {
+		max-width: 1000px;
+	}
+	.section-head .line {
+		display: block;
 	}
 	.section-head.compact {
 		margin-bottom: 24px;
@@ -315,7 +374,7 @@
 	.auth {
 		display: flex;
 		align-items: center;
-		gap: 24px;
+		gap: 18px;
 		font-size: 14px;
 		font-weight: 500;
 	}
