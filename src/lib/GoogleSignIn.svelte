@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { GOOGLE_CLIENT_ID } from '$app/env/public';
+
+	let { next = '/account' }: { next?: string } = $props();
 
 	let button = $state<HTMLDivElement>();
 	let loaded = $state(typeof window !== 'undefined' && 'google' in window);
@@ -12,14 +13,21 @@
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ credential })
 		});
-		if (res.ok) await goto(resolve('/dashboard'), { invalidateAll: true });
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		if (res.ok) await goto(next, { invalidateAll: true });
 		else alert('로그인에 실패했습니다.');
 	}
 
 	$effect(() => {
 		if (!loaded || !button || !GOOGLE_CLIENT_ID) return;
 		google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onCredential });
-		google.accounts.id.renderButton(button, { type: 'standard', size: 'medium' });
+		google.accounts.id.renderButton(button, {
+			type: 'standard',
+			size: 'large',
+			theme: 'filled_black',
+			shape: 'pill',
+			width: 280
+		});
 	});
 </script>
 

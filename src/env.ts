@@ -6,6 +6,10 @@ export const variables = defineEnvVars({
 		// optional at build time; checked when the db client is created
 		schema: (value) => value || undefined
 	},
+	ANTHROPIC_API_KEY: {
+		description: 'Anthropic API key for the agent search (spec extraction and the two race agents)',
+		schema: (value) => value || undefined
+	},
 	GOOGLE_CLIENT_ID: {
 		description: 'Google OAuth client ID for Google Identity Services sign-in',
 		public: true,
