@@ -8,7 +8,8 @@ import {
 	numeric,
 	boolean,
 	unique,
-	index
+	index,
+	jsonb
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -59,6 +60,14 @@ export const products = pgTable(
 		imageUrl: text('image_url'),
 		url: text('url').notNull(),
 		categories: text('categories').array().notNull().default([]),
+		brand: text('brand'),
+		rating: numeric('rating', { precision: 3, scale: 2, mode: 'number' }),
+		reviewsCount: integer('reviews_count'),
+		description: text('description'),
+		// search keywords that found the product (keyword-based sources)
+		keywords: text('keywords').array().notNull().default([]),
+		// full source record, for fields we don't map to columns
+		raw: jsonb('raw'),
 		// false once a full scrape no longer finds the product
 		active: boolean('active').notNull().default(true),
 		firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
@@ -73,6 +82,9 @@ export const scrapeRuns = pgTable('scrape_runs', {
 		.notNull()
 		.references(() => sites.id, { onDelete: 'cascade' }),
 	status: text('status', { enum: ['running', 'succeeded', 'failed'] }).notNull(),
+	// job id at an external provider (e.g. Bright Data snapshot id)
+	externalJobId: text('external_job_id'),
+	input: jsonb('input'),
 	pagesFetched: integer('pages_fetched').notNull().default(0),
 	productsFound: integer('products_found').notNull().default(0),
 	error: text('error'),
@@ -82,3 +94,36 @@ export const scrapeRuns = pgTable('scrape_runs', {
 
 export type Site = typeof sites.$inferSelect;
 export type ScrapeRun = typeof scrapeRuns.$inferSelect;
+
+export const apiKeys = pgTable('api_keys', {
+	id: serial('id').primaryKey(),
+	userId: integer('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	// sha256 of the key; the key itself is shown once when issued
+	keyHash: text('key_hash').notNull().unique(),
+	// first characters of the key, for display
+	prefix: text('prefix').notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+	lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+	revokedAt: timestamp('revoked_at', { withTimezone: true })
+});
+
+export const apiRequests = pgTable(
+	'api_requests',
+	{
+		id: serial('id').primaryKey(),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		apiKeyId: integer('api_key_id')
+			.notNull()
+			.references(() => apiKeys.id, { onDelete: 'cascade' }),
+		method: text('method').notNull(),
+		path: text('path').notNull(),
+		query: text('query'),
+		status: integer('status').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index().on(t.userId, t.createdAt)]
+);

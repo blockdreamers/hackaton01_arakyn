@@ -18,7 +18,8 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
-		"scrape": "bun --env-file=.env scripts/scrape.ts"
+		"scrape": "bun --env-file=.env scripts/scrape.ts",
+		"amazon": "bun --env-file=.env scripts/amazon.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

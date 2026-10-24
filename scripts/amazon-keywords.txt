@@ -1,0 +1,101 @@
+# Amazon keyword discovery input (one per line, # = comment). DRAFT: review before running.
+# Theme: science / STEM education supplies, to match the iaansci catalog.
+microscope for kids
+compound microscope
+digital microscope
+microscope slides prepared
+stereo microscope
+telescope for kids
+magnifying glass
+science kit for kids
+chemistry set
+physics experiment kit
+electricity kit for kids
+circuit kit
+snap circuits
+magnet set science
+bar magnets
+horseshoe magnet
+iron filings
+compass for kids
+prism glass optics
+lens set optics
+laser pointer science
+spring scale
+digital scale lab
+balance scale education
+stopwatch
+thermometer lab
+digital thermometer probe
+hygrometer
+ph test strips
+litmus paper
+test tubes
+test tube rack
+beaker set
+graduated cylinder
+erlenmeyer flask
+petri dish
+pipette dropper
+lab safety goggles
+lab coat kids
+nitrile gloves lab
+alcohol lamp
+bunsen burner
+hot plate magnetic stirrer
+funnel lab
+filter paper lab
+crystal growing kit
+volcano kit
+slime kit
+rock collection kit
+fossil kit
+geology kit
+mineral specimens
+solar system model
+planetarium projector
+globe for kids
+weather station kids
+rain gauge
+anemometer
+human anatomy model
+skeleton model
+heart model anatomy
+brain model anatomy
+dna model kit
+cell model
+plant growing kit
+ant farm
+butterfly growing kit
+insect collection kit
+bug catcher kit
+terrarium kit
+stem toys
+robotics kit
+arduino starter kit
+coding robot for kids
+raspberry pi kit
+solar power kit
+wind turbine kit
+hydraulic arm kit
+gear set educational
+pulley system kit
+newton's cradle
+gyroscope toy
+balloon car kit
+rocket launcher kids
+model rocket kit
+light experiment kit
+sound experiment kit
+tuning fork set
+color filter set
+uv flashlight
+glow in the dark experiment
+math manipulatives
+geometric solids
+fraction tiles
+abacus
+base ten blocks
+measuring tape kids
+graph paper notebook
+lab notebook

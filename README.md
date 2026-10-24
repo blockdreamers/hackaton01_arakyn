@@ -50,6 +50,30 @@ One request per second, identified as `AgentCatalogBot`, only robots.txt-allowed
 missing from a finished run are marked `active = false`. To add a shop, implement `SiteScraper`
 in `src/lib/server/scraper/sources/` and register it in `src/lib/server/scraper/index.ts`.
 
+## API
+
+Users issue an API key on `/dashboard` (shown once, stored hashed) and call the API with
+`Authorization: Bearer <key>`. Every call is logged in `api_requests` and shown on the dashboard.
+
+- `GET /api/v1/products?q=&country=&site=&limit=&offset=`
+- `GET /api/v1/sites`
+
+## Admin
+
+`/nimda` (scrape status and trigger) is only visible to emails in `src/lib/server/admin.ts`;
+everyone else gets a 404.
+
+## Amazon (Bright Data)
+
+"Amazon products - discover by keyword" (`gd_l7q7dkf244hwjntr0`), billed per record. Needs
+`BRIGHTDATA_API_TOKEN` in `.env`. Keywords are in `scripts/amazon-keywords.txt`.
+
+```sh
+bun run amazon trigger --keywords "microscope" --limit-per-keyword 3 --max-total 3   # cheap test
+bun run amazon trigger                 # all keywords, <= 90 per keyword, <= 9500 total
+bun run amazon collect                 # waits for the snapshot, stores products (site amazon_us, US/USD)
+```
+
 ## Deploy
 
 Every push to `main` deploys via GitHub Actions (`.github/workflows/deploy.yml`). Manual deploy from a

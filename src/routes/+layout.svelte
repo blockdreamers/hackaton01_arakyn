@@ -15,6 +15,7 @@
 	<a href={resolve('/')}><img src={favicon} alt="Agent Catalog" width="32" height="32" /></a>
 	{#if data.user}
 		<span>{data.user.name ?? data.user.email}</span>
+		{#if data.isAdmin}<a href={resolve('/nimda')}>관리자</a>{/if}
 		<form method="POST" action="/auth/logout"><button>로그아웃</button></form>
 	{:else}
 		<GoogleSignIn />
