@@ -13,6 +13,7 @@ export const GET: RequestHandler = apiHandler(async () => {
 			baseUrl: sites.baseUrl,
 			country: sites.country,
 			currency: sites.currency,
+			priceIncludesTax: sites.priceIncludesTax,
 			products: count(products.id)
 		})
 		.from(sites)

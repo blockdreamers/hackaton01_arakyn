@@ -1,10 +1,12 @@
-import { building } from '$app/env';
+import { building, dev } from '$app/env';
 import { DATABASE_URL } from '$app/env/private';
 import { createDb, type Db } from './client.ts';
 
 if (!DATABASE_URL && !building) throw new Error('DATABASE_URL is not set');
 
-// Reuse one pool across dev hot reloads; otherwise every reload opens a new pool and the shared
-// database runs out of connection slots.
-const g = globalThis as { __agentCatalogDb?: Db };
-export const db = (g.__agentCatalogDb ??= createDb(DATABASE_URL ?? ''));
+// In dev, HMR re-runs this module on every edit; reuse one client instead of leaking a
+// new pool (and its connections) each time.
+const cache = globalThis as { __db?: Db };
+export const db = dev
+	? (cache.__db ??= createDb(DATABASE_URL ?? ''))
+	: createDb(DATABASE_URL ?? '');

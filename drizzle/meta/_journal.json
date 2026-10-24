@@ -29,6 +29,13 @@
       "when": 1792812872002,
       "tag": "0003_romantic_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792816909998,
+      "tag": "0004_nasty_red_hulk",
+      "breakpoints": true
     }
   ]
 }

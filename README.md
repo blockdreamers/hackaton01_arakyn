@@ -41,14 +41,27 @@ The ID token is verified server-side (`/auth/google`), users and sessions are st
 
 Collects product name, price, image URL, link, brand and categories from shop listing pages into
 `products`. Each shop is a row in `sites` with its country (ISO 3166-1, e.g. `KR`) and currency
-(ISO 4217, e.g. `KRW`); prices are stored in the site's currency.
+(ISO 4217, e.g. `KRW`); prices are stored in the site's currency, and `sites.price_includes_tax`
+says whether they include VAT / sales tax as shown by the shop.
 
-| site | listing | size (Oct 2026) | delay |
-|---|---|---|---|
-| `iaansci` (이안과학, Cafe24) | `/product/list.html?cate_no=N&page=P` | ~24k products, ~700 pages, ~12 min | 1 s |
-| `navimro` (나비엠알오) | `/s/c-NN/page-P/?hits=90` | ~2.07M products, ~23k pages (~2 MB each) | 2 s |
+| site                                   | listing                                                                   | size (Oct 2026)                                      | delay                    |
+| -------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------ |
+| `iaansci` (이안과학, Cafe24)           | `/product/list.html?cate_no=N&page=P`                                     | ~24k products, ~700 pages, ~12 min                   | 1 s                      |
+| `navimro` (나비엠알오)                 | `/s/c-NN/page-P/?hits=90`                                                 | ~2.07M products, ~23k pages (~2 MB each)             | 2 s                      |
+| `officedepot` (오피스디포)             | `/cate/cateItemList.do?cateId=N&rowLevel=1&currentPageNo=P`               | ~31k products, ~530 pages                            | 1.5 s                    |
+| `toolstation_uk` (Toolstation, GB/GBP) | `/{dept}/{slug}/c{id}?page=N`, 246 categories                             | ~25k products, ~550 pages, prices inc. VAT           | 2 s                      |
+| `uline` (Uline, US/USD)                | `/Cls_{id}` → `/Grp_{id}` → `/BL_{id}` product-line tables                | ~49k products, ~5.7k pages, lowest-tier unit price   | 2 s                      |
+| `hoffmann_de` (Hoffmann Group, DE/EUR) | `/DE/de/hom/{slug}/c/{code}?page=N` (0-based, ≤100 pages), 291 categories | ~150–250k products, ~3–4k pages, prices inc. 19% VAT | 5 s (robots crawl-delay) |
+| `daiso` (다이소, KR)                   | daiso-mcp `GET /api/daiso/products?q=`                                    | keyword search, 100/page, ≤3 pages/keyword           | 2 s                      |
+| `daiso_jp` (DAISO Japan, JP/JPY)       | daiso-mcp `GET /api/daiso-jp/products?q=`                                 | keyword search, 24/page, ≤3 pages/keyword            | 2 s                      |
 
-- CLI: `bun run scrape <site> [--categories c-23,c-24] [--max-pages 10]`
+Daiso goes through the public [daiso-mcp](https://github.com/hmmhmmhm/daiso-mcp) API
+(`https://mcp.aka.page`), a shared free service, so it runs slowly and only a few pages per keyword.
+Default keywords are the 100 MRO terms in Korean / Japanese (`src/lib/server/scraper/keywords/mro.ts`);
+any keywords can be passed instead. Keyword sources store the search term in `products.keywords`.
+
+- CLI: `bun run scrape <site> [--categories c-23,c-24 | --categories 육각볼트,베어링] [--max-pages 10] [--resume <runId>]`
+- Resume: every page saves `scrape_runs.progress`; `--resume <runId>` (or the field on `/nimda`) skips finished categories and continues from the last saved page (navimro, iaansci, officedepot; other sources restart the unfinished category)
 - Or `/nimda` (admin only): pick site and optional range, runs in the background, progress in `scrape_runs`
 
 Only robots.txt-allowed pages, identified as `AgentCatalogBot`. Products are saved page by page.

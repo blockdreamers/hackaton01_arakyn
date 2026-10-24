@@ -10,13 +10,14 @@
 <h2>사이트</h2>
 <table>
 	<thead>
-		<tr><th>사이트</th><th>국가</th><th>통화</th><th>상품 수</th></tr>
+		<tr><th>사이트</th><th>국가</th><th>통화</th><th>세금 포함</th><th>상품 수</th></tr>
 	</thead>
 	<tbody>
 		{#each data.siteStats as s (s.code)}
 			<tr
-				><td>{s.name} ({s.code})</td><td>{s.country}</td><td>{s.currency}</td><td>{s.products}</td
-				></tr
+				><td>{s.name} ({s.code})</td><td>{s.country}</td><td>{s.currency}</td><td
+					>{s.priceIncludesTax == null ? '?' : s.priceIncludesTax ? '포함' : '별도'}</td
+				><td>{s.products}</td></tr
 			>
 		{/each}
 	</tbody>
@@ -30,7 +31,12 @@
 			{#each data.scrapers as code (code)}<option>{code}</option>{/each}
 		</select>
 	</label>
-	<label>카테고리 (쉼표, 비우면 전체) <input name="categories" placeholder="c-23,c-24" /></label>
+	<label
+		>카테고리 또는 키워드 (쉼표, 비우면 기본 목록 전체) <input
+			name="categories"
+			placeholder="c-23,c-24 / 육각볼트,베어링"
+		/></label
+	>
 	<label>카테고리당 최대 페이지 (비우면 전체) <input name="maxPages" type="number" min="1" /></label
 	>
 	<button>다시 긁기</button>

@@ -15,6 +15,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			name: sites.name,
 			country: sites.country,
 			currency: sites.currency,
+			priceIncludesTax: sites.priceIncludesTax,
 			products: count(products.id)
 		})
 		.from(sites)
@@ -50,10 +51,15 @@ export const actions: Actions = {
 			.map((c) => c.trim())
 			.filter(Boolean);
 		const maxPages = Number(form.get('maxPages')) || undefined;
+		const resumeRunId = Number(form.get('resume')) || undefined;
 
 		let started;
 		try {
-			started = await startRun(db, site, { categories, maxPages });
+			started = await startRun(db, site, {
+				categories: categories.length ? categories : undefined,
+				maxPages,
+				resumeRunId
+			});
 		} catch (e) {
 			return fail(409, { error: e instanceof Error ? e.message : String(e) });
 		}

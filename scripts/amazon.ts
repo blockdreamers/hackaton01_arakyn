@@ -27,7 +27,7 @@ const { positionals, values } = parseArgs({
 });
 const [command, runArg] = positionals;
 
-const db = createDb(DATABASE_URL);
+const db = createDb(DATABASE_URL, { max: 2 });
 const bd = new BrightData(BRIGHTDATA_API_TOKEN);
 
 const [site] = await db

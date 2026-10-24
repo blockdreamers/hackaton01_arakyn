@@ -25,6 +25,7 @@ export const GET: RequestHandler = apiHandler(async ({ url }) => {
 				site: sites.code,
 				country: sites.country,
 				currency: sites.currency,
+				priceIncludesTax: sites.priceIncludesTax,
 				externalId: products.externalId,
 				name: products.name,
 				price: products.price,
