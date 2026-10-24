@@ -1,5 +1,5 @@
 // search_offers for the catalog agent: read-only keyword search over the connected products table.
-import { and, asc, eq, ilike, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
 import { products, sites } from '#lib/server/db/schema.ts';
 import { fnv } from '#lib/demo/catalog.ts';
@@ -27,11 +27,20 @@ export const SEARCH_OFFERS_SCHEMA = {
 			items: { type: 'string' },
 			description: 'Words every product name must contain.'
 		},
-		max_price: { type: 'number', description: 'Maximum unit price in the listing currency.' },
+		max_price: {
+			type: 'number',
+			description: 'Maximum unit price in KRW (prices in USD/JPY are converted at fixed rates).'
+		},
 		limit: { type: 'integer', description: 'Max rows, default 10.' }
 	},
 	required: ['terms']
 } as const;
+
+// Fixed demo rates so prices from KR/JP/US shops rank on one scale.
+export const KRW_PER = { KRW: 1, USD: 1380, JPY: 9.2 } as Record<string, number>;
+export const toKrw = (price: number | null, currency: string) =>
+	price == null ? null : Math.round(price * (KRW_PER[currency] ?? 1));
+const priceKrwSql = sql`(${products.price} * case ${sites.currency} when 'USD' then 1380 when 'JPY' then 9.2 else 1 end)`;
 
 const like = (t: string) => `%${t.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
 
@@ -50,7 +59,7 @@ export async function searchOffers(input: SearchInput) {
 	const where: SQL[] = [eq(products.active, true), anyTerm!];
 	for (const w of input.must_include ?? [])
 		if (w.trim()) where.push(ilike(products.name, like(w.trim())));
-	if (input.max_price != null) where.push(lte(products.price, input.max_price));
+	if (input.max_price != null) where.push(sql`${priceKrwSql} <= ${input.max_price}`);
 
 	const limit = Math.min(Math.max(input.limit ?? 10, 1), 10);
 	const rows = await db
@@ -67,11 +76,12 @@ export async function searchOffers(input: SearchInput) {
 		.from(products)
 		.innerJoin(sites, eq(products.siteId, sites.id))
 		.where(and(...where))
-		.orderBy(sql`${products.price} asc nulls last`, asc(products.id))
+		.orderBy(sql`${priceKrwSql} asc nulls last`, asc(products.id))
 		.limit(limit);
 	const [{ total }] = await db
 		.select({ total: sql<number>`count(*)::int` })
 		.from(products)
+		.innerJoin(sites, eq(products.siteId, sites.id))
 		.where(and(...where));
 
 	const compact = rows.map((r) => ({
@@ -79,6 +89,7 @@ export async function searchOffers(input: SearchInput) {
 		name: r.name,
 		price: r.price,
 		currency: r.currency,
+		price_krw: toKrw(r.price, r.currency),
 		site: r.site,
 		url: r.url,
 		categories: r.categories,
@@ -105,7 +116,10 @@ export function verifyRows(spec: Spec, out: SearchOutput) {
 		{
 			row: r.id,
 			check: 'price',
-			ok: spec.max_unit_price == null || (r.price ?? Infinity) <= spec.max_unit_price
+			ok:
+				spec.max_unit_price == null ||
+				(r.price_krw ?? Infinity) <=
+					spec.max_unit_price * (KRW_PER[spec.currency ?? 'KRW'] ?? 1)
 		},
 		{ row: r.id, check: 'listed', ok: r.price != null }
 	]);

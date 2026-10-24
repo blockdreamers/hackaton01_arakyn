@@ -56,7 +56,7 @@
 			// not remembered
 		}
 	}
-	let presetId = $state<PresetId>(PRESETS[0].id);
+	let exampleIdx = 0;
 	let query = $state('');
 	let withWeb = $state(true);
 	let running = $state(false);
@@ -177,41 +177,45 @@
 				>
 			</header>
 
-			<div class="forms">
-				<form
-					class="row"
-					onsubmit={(e) => {
-						e.preventDefault();
-						run({ mode: 'preset', presetId, lanes: ['catalog', 'web'] });
-					}}
-				>
-					<select bind:value={presetId} aria-label="Preset question" disabled={running}>
-						{#each PRESETS as p (p.id)}<option value={p.id}>{p.label}</option>{/each}
-					</select>
-					<button class="btn-s alt" disabled={running}>Search preset</button>
-				</form>
-				<p class="hint">{PRESETS.find((p) => p.id === presetId)?.question}</p>
-				<form
-					class="row"
-					onsubmit={(e) => {
-						e.preventDefault();
-						if (query.trim())
-							run({ mode: 'ai', query, lanes: withWeb ? ['catalog', 'web'] : ['catalog'] });
-					}}
-				>
-					<input
-						bind:value={query}
-						placeholder="e.g. 5mm 빨간 LED 200개, 개당 200원 이하"
-						aria-label="Describe the part you need"
+			<form
+				class="forms"
+				onsubmit={(e) => {
+					e.preventDefault();
+					if (query.trim())
+						run({ mode: 'ai', query, lanes: withWeb ? ['catalog', 'web'] : ['catalog'] });
+				}}
+			>
+				<textarea
+					bind:value={query}
+					rows="3"
+					placeholder="Describe the part and spec you need, e.g. 5mm 빨간 LED 200개, 개당 200원 이하"
+					aria-label="Describe the part you need"
+					disabled={running}
+					onkeydown={(e) => {
+						if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+							e.preventDefault();
+							e.currentTarget.form?.requestSubmit();
+						}
+					}}></textarea>
+				<div class="row">
+					<!-- Example search: fills a sample question and replays a recorded real run (no API cost) -->
+					<button
+						class="btn-s alt"
+						type="button"
 						disabled={running}
-					/>
-					<button class="btn-s" disabled={running || !query.trim()}>Ask AI</button>
-				</form>
+						onclick={() => {
+							const p = PRESETS[exampleIdx++ % PRESETS.length];
+							query = p.question;
+							run({ mode: 'preset', presetId: p.id as PresetId, lanes: ['catalog', 'web'] });
+						}}>예시 검색</button
+					>
+					<button class="btn-s" type="submit" disabled={running || !query.trim()}>실제 검색</button>
+				</div>
 				<label class="toggle"
 					><input type="checkbox" bind:checked={withWeb} disabled={running} /> Include live web search
 					(≈$0.3–1 per run)</label
 				>
-			</div>
+			</form>
 
 			<div class="body">
 				{#if errorMsg}<p class="err">{errorMsg}</p>{/if}
@@ -224,10 +228,10 @@
 						</div>
 						<p>{spec.summary}</p>
 						<div class="chips">
-							{#each [...spec.search_terms_ko, ...spec.search_terms_en] as t (t)}<span class="chip"
+							{#each [...spec.search_terms_ko, ...spec.search_terms_en] as t, i (i)}<span class="chip"
 									>{t}</span
 								>{/each}
-							{#each spec.attributes as a (a.field)}<span class="chip a">{a.field}: {a.value}</span
+							{#each spec.attributes as a, i (i)}<span class="chip a">{a.field}: {a.value}</span
 								>{/each}
 							{#if spec.qty}<span class="chip a">qty {spec.qty}</span>{/if}
 							{#if spec.max_unit_price}<span class="chip a"
@@ -236,7 +240,7 @@
 						</div>
 						{#if spec.ambiguities.length}
 							<ul class="amb">
-								{#each spec.ambiguities as q (q)}<li>{q}</li>{/each}
+								{#each spec.ambiguities as q, i (i)}<li>{q}</li>{/each}
 							</ul>
 						{/if}
 					</div>
@@ -268,7 +272,7 @@
 									{#if l.results.length}
 										<table>
 											<tbody>
-												{#each l.results as r (r.url)}
+												{#each l.results as r, i (i)}
 													<tr>
 														<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 														<td><a href={r.url} target="_blank" rel="noreferrer">{r.name}</a></td>
@@ -364,10 +368,18 @@
 		max-height: min(80vh, 820px);
 		display: flex;
 		flex-direction: column;
-		border-radius: 16px;
-		border: 1.5px solid var(--brand);
-		background: #fff;
-		box-shadow: 0 24px 60px -20px rgba(15, 23, 42, 0.55);
+		border-radius: 18px;
+		/* gradient ring + raised, slightly puffy look */
+		border: 2px solid transparent;
+		background:
+			linear-gradient(#fff, #fff) padding-box,
+			linear-gradient(135deg, #5df0a8 0%, #3d6bff 45%, #8b5cf6 100%) border-box;
+		box-shadow:
+			0 28px 60px -18px rgba(31, 75, 255, 0.55),
+			0 10px 22px -12px rgba(15, 23, 42, 0.5),
+			inset 0 2px 0 rgba(255, 255, 255, 0.9),
+			inset 0 -3px 8px rgba(31, 75, 255, 0.08);
+		transform: translateY(-2px);
 		overflow: hidden;
 	}
 	.ph {
@@ -418,21 +430,26 @@
 	}
 	.row {
 		display: flex;
-		gap: 6px;
+		gap: 8px;
 	}
-	.row select,
-	.row input {
+	.row .btn-s {
 		flex: 1;
-		min-width: 0;
+		padding: 11px 12px;
+		font-size: 14px;
+	}
+	.forms textarea {
+		width: 100%;
+		min-height: 92px;
+		resize: vertical;
 		background: #fff;
 		border: 1px solid #d1d5db;
-		border-radius: 9px;
+		border-radius: 12px;
 		color: var(--d-ink);
-		font: 13.5px var(--font);
-		padding: 8px 10px;
+		font: 15px/1.5 var(--font);
+		padding: 12px 14px;
+		box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.08);
 	}
-	.row select:focus,
-	.row input:focus {
+	.forms textarea:focus {
 		outline: none;
 		border-color: var(--brand);
 		box-shadow: 0 0 0 3px rgba(31, 75, 255, 0.15);

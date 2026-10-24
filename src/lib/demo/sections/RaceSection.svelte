@@ -1,28 +1,38 @@
 <script lang="ts">
 	import '#lib/demo/theme.css';
 	import Odometer from '#lib/demo/Odometer.svelte';
-	import { demo, scrollToSection } from '#lib/demo/demo-state.svelte.ts';
+	import { scrollToSection } from '#lib/demo/demo-state.svelte.ts';
 	import { onMount } from 'svelte';
-	import { VENDOR_BY_ID, PRODUCT_BY_ID, fnv } from '#lib/demo/catalog.ts';
-	import { SCENARIOS, resolveScenario, runSearch, type ScenarioId } from '#lib/demo/search.ts';
-	import { countSearch } from '#lib/demo/stats.ts';
-	import {
-		DATA_FEE_USDC,
-		WEB_ERRORS,
-		costOf,
-		simulatedSource,
-		type Lane,
-		type RaceEvent,
-		type RaceSource
-	} from '#lib/demo/race.ts';
 
+	// Real race: the question goes to /api/agent-search, which runs two Claude agents (web search vs
+	// Agent Catalog on the live DB) and streams their real token usage.
+	type Lane = 'web' | 'catalog';
+	interface Step {
+		t: number;
+		label: string;
+		inputTokens: number;
+		tone?: 'ok' | 'bad' | 'pay';
+		url?: string;
+	}
+	interface Result {
+		name: string;
+		price: number | null;
+		currency: string;
+		site: string;
+		url: string;
+	}
 	interface LaneState {
 		input: number;
 		output: number;
 		calls: number;
 		elapsed: number;
-		log: RaceEvent[];
+		cost: number;
+		log: Step[];
 		done: boolean;
+		answer: string;
+		results: Result[];
+		verify: string | null;
+		paymentUrl: string | null;
 	}
 
 	const empty = (): LaneState => ({
@@ -30,30 +40,30 @@
 		output: 0,
 		calls: 0,
 		elapsed: 0,
+		cost: 0,
 		log: [],
-		done: false
+		done: false,
+		answer: '',
+		results: [],
+		verify: null,
+		paymentUrl: null
 	});
 
-	// Nothing is shown up front: the question and the results appear only after a search.
-	let current = $state<ScenarioId | null>(null);
 	let asked = $state('');
-	let missing = $state(false);
 	let freeText = $state('');
 	let lanes = $state<Record<Lane, LaneState>>({ web: empty(), catalog: empty() });
+	let spec = $state<{
+		search_terms_ko?: string[];
+		search_terms_en?: string[];
+		ambiguities?: string[];
+	} | null>(null);
 	let running = $state(false);
 	let finished = $state(false);
-	let source: RaceSource | null = null;
+	let errorMsg = $state('');
+	let replayed = $state(false);
+	let abort: AbortController | null = null;
 	let clock: ReturnType<typeof setInterval> | null = null;
-	let started = 0;
 
-	const scenario = $derived(current ? SCENARIOS[current] : null);
-	const result = $derived(current ? runSearch(current) : null);
-	const txHash = $derived(
-		scenario ? `0x${fnv(scenario.question).slice(0, 4)}…${fnv(scenario.call).slice(0, 4)}` : ''
-	);
-
-	const webCost = $derived(costOf(lanes.web.input, lanes.web.output));
-	const catCost = $derived(costOf(lanes.catalog.input, lanes.catalog.output));
 	// Live multiplier: climbs while the web agent keeps reading pages and the catalog agent stays small.
 	const ratio = $derived(lanes.catalog.input > 0 ? lanes.web.input / lanes.catalog.input : 0);
 	const ratioShown = $derived(ratio >= 10 ? Math.round(ratio) : Math.round(ratio * 10) / 10);
@@ -61,73 +71,102 @@
 	const heat = $derived(ratio > 1 ? Math.min(1, Math.log10(ratio) / Math.log10(300)) : 0);
 
 	function reset() {
-		source?.stop();
-		source = null;
+		abort?.abort();
+		abort = null;
 		if (clock) clearInterval(clock);
 		clock = null;
 		lanes = { web: empty(), catalog: empty() };
+		spec = null;
 		running = false;
 		finished = false;
+		errorMsg = '';
+		replayed = false;
 	}
 
-	function onEvent(e: RaceEvent) {
-		const l = lanes[e.lane];
-		if (e.kind === 'done') {
-			l.done = true;
-			l.elapsed = e.t;
-			if (lanes.web.done && lanes.catalog.done) {
-				running = false;
-				finished = true;
-				if (clock) clearInterval(clock);
-				clock = null;
-			}
-			return;
-		}
-		l.input += e.inputTokens;
-		l.output += e.outputTokens;
-		if (e.kind === 'tool') l.calls += 1;
-		l.log.push(e);
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	function onEvent(e: any) {
+		if (e.type === 'spec') spec = e.spec;
+		else if (e.type === 'step') {
+			const l = lanes[e.lane as Lane];
+			l.input += e.inputTokens;
+			l.output += e.outputTokens;
+			if (e.kind === 'tool') l.calls += 1;
+			l.log.push({ t: e.t, label: e.label, inputTokens: e.inputTokens, tone: e.tone, url: e.url });
+		} else if (e.type === 'lane_done') {
+			const l = lanes[e.lane as Lane];
+			Object.assign(l, {
+				done: true,
+				input: e.inputTokens,
+				output: e.outputTokens,
+				cost: e.costUsd,
+				calls: Math.max(l.calls, e.calls ?? 0),
+				elapsed: e.t,
+				answer: e.aborted ? `Stopped: ${e.aborted}` : e.answer,
+				results: e.results ?? [],
+				verify: e.verify ?? null,
+				paymentUrl: e.paymentUrl ?? null
+			});
+		} else if (e.type === 'summary') replayed = e.replayed;
+		else if (e.type === 'error') errorMsg = e.message;
 	}
 
-	function run() {
-		if (!scenario || running) return;
+	async function race(ev: SubmitEvent) {
+		ev.preventDefault();
+		if (running || !freeText.trim()) return;
 		reset();
+		asked = freeText.trim();
 		running = true;
-		started = performance.now();
+		abort = new AbortController();
+		const started = performance.now();
 		clock = setInterval(() => {
 			const t = (performance.now() - started) / 1000;
 			for (const lane of ['web', 'catalog'] as Lane[])
 				if (!lanes[lane].done) lanes[lane].elapsed = t;
 		}, 100);
-		countSearch();
-		source = simulatedSource(scenario.id, scenario.call, txHash);
-		source.subscribe(onEvent);
-		source.start();
-	}
-
-	function submitFree(ev: SubmitEvent) {
-		ev.preventDefault();
-		if (running || !freeText.trim()) return;
-		reset();
-		asked = freeText.trim();
-		current = resolveScenario(asked);
-		missing = !current;
-		if (current) run();
+		try {
+			const res = await fetch('/api/agent-search', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ mode: 'ai', query: asked, lanes: ['catalog', 'web'] }),
+				signal: abort.signal
+			});
+			if (!res.ok || !res.body) throw new Error(await res.text());
+			const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+			let buf = '';
+			for (;;) {
+				const { value, done } = await reader.read();
+				if (done) break;
+				buf += value;
+				let i;
+				while ((i = buf.indexOf('\n\n')) >= 0) {
+					const chunk = buf.slice(0, i);
+					buf = buf.slice(i + 2);
+					if (chunk.startsWith('data: ')) onEvent(JSON.parse(chunk.slice(6)));
+				}
+			}
+		} catch (e) {
+			if ((e as Error).name !== 'AbortError') errorMsg = (e as Error).message;
+		} finally {
+			if (clock) clearInterval(clock);
+			clock = null;
+			running = false;
+			finished = !errorMsg;
+		}
 	}
 
 	function clearAll() {
 		reset();
-		current = null;
-		missing = false;
 		asked = '';
 		freeText = '';
 	}
 
-	onMount(() => {
-		return reset;
-	});
+	onMount(() => reset);
 
 	const usd = (v: number) => (v < 0.1 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`);
+	const money = (r: Result) =>
+		r.price == null
+			? '–'
+			: `${r.currency === 'KRW' ? '₩' : r.currency === 'USD' ? '$' : r.currency === 'JPY' ? '¥' : ''}${r.price.toLocaleString()}`;
 </script>
 
 <div class="race">
@@ -141,7 +180,7 @@
 		</div>
 	</header>
 
-	<form class="ask" onsubmit={submitFree}>
+	<form class="ask" onsubmit={race}>
 		<input
 			bind:value={freeText}
 			placeholder="Describe the part you need, e.g. stainless M4 screws, 500 pcs"
@@ -152,18 +191,28 @@
 			{running ? 'Racing…' : 'Race'}
 		</button>
 	</form>
-	<p class="hint">Both agents get your exact words and the same model. Only the tools differ.</p>
+	<p class="hint">
+		Two real Claude agents get your exact words and the same model. Only the tools differ. A live
+		race costs about $0.3–1 in API usage.
+	</p>
 
-	{#if missing}
-		<div class="missing">
-			<b>Not in catalog.</b>
-			Nothing in the index matches “{asked}”. Try a fastener, cable tie, USB-C cable or hinge.
-		</div>
-	{:else if scenario && (running || finished)}
+	{#if errorMsg}
+		<div class="missing"><b>Search failed.</b> {errorMsg}</div>
+	{/if}
+	{#if running || finished}
 		<div class="asked">
 			<span class="mono">“{asked}”</span>
 			{#if finished}<button class="clear" type="button" onclick={clearAll}>New search</button>{/if}
 		</div>
+		{#if spec}
+			<div class="spec">
+				<span class="k">Parsed spec</span>
+				{#each [...(spec.search_terms_ko ?? []), ...(spec.search_terms_en ?? [])] as term, i (i)}<span
+						class="chip">{term}</span
+					>{/each}
+				{#each spec.ambiguities ?? [] as a, i (i)}<span class="amb">? {a}</span>{/each}
+			</div>
+		{/if}
 		<div class="split">
 			{#if ratio > 0}
 				<div class="seam" style:--heat={heat} aria-hidden="true">
@@ -179,8 +228,9 @@
 				{@const l = lanes[lane]}
 				<section class="lane {lane}">
 					<h2>
-						{lane === 'web' ? 'Web search + RAG' : 'Agent Catalog'}
-						<span class="badge">{lane === 'web' ? 'amazon · taobao direct' : 'MCP · x402'}</span>
+						{lane === 'web' ? 'Agent + web search' : 'Agent + Agent Catalog'}
+						<span class="badge">{lane === 'web' ? 'web_search · web_fetch' : 'live DB · x402'}</span
+						>
 					</h2>
 					<div class="tok">
 						<div class="k">Cumulative input tokens</div>
@@ -190,65 +240,46 @@
 						<div><span class="k">Tool calls</span><span class="v">{l.calls}</span></div>
 						<div><span class="k">Elapsed</span><span class="v">{l.elapsed.toFixed(1)}s</span></div>
 						<div>
-							<span class="k">{lane === 'web' ? 'Token cost' : 'Tokens + data fee'}</span>
-							<span class="v"
-								>{usd(
-									lane === 'web'
-										? webCost
-										: catCost + (l.log.some((e) => e.kind === 'pay') ? DATA_FEE_USDC : 0)
-								)}</span
-							>
+							<span class="k">Cost</span>
+							<span class="v">{l.done ? usd(l.cost) : '…'}</span>
 						</div>
 					</div>
 					<ol class="log">
 						{#each l.log as e, i (i)}
 							<li class={e.tone ?? ''}>
 								<span class="t">{e.t.toFixed(1)}s</span>
-								<span class="msg">{e.label}</span>
+								<span class="msg"
+									>{e.label}{#if e.url}
+										<a href={e.url} target="_blank" rel="noreferrer">view tx ↗</a>{/if}</span
+								>
 								<span class="d">{e.inputTokens ? '+' + e.inputTokens.toLocaleString() : ''}</span>
 							</li>
 						{/each}
 					</ol>
-					{#if l.done && result}
+					{#if l.done}
 						<div class="answer">
-							{#if lane === 'web'}
-								<b>Answer issues</b>
-								<ul>
-									{#each WEB_ERRORS[scenario.id] as err (err)}<li>✗ {err}</li>{/each}
-								</ul>
+							{#if lane === 'catalog' && l.results.length}
+								<b
+									>Delivered results {#if l.verify}<span class="badge {l.verify}">{l.verify}</span
+										>{/if}</b
+								>
+								<ol class="results">
+									{#each l.results as r, i (i)}
+										<li>
+											<a href={r.url} target="_blank" rel="noreferrer">{r.name}</a>
+											<span class="mono">{money(r)} · {r.site}</span>
+										</li>
+									{/each}
+								</ol>
+								{#if l.paymentUrl}<a
+										class="paylink"
+										href={l.paymentUrl}
+										target="_blank"
+										rel="noreferrer">0.02 USDC paid on Base Sepolia ↗</a
+									>{/if}
 							{:else}
-								<b>Answer · verified offers</b>
-								<div class="tscroll">
-									<table>
-										<thead>
-											<tr
-												><th>#</th><th>Vendor</th><th>Product</th><th class="n">Unit</th><th
-													class="n">MOQ</th
-												><th class="n">Lead</th></tr
-											>
-										</thead>
-										<tbody>
-											{#each result.top as o, i (o.id)}
-												<tr>
-													<td>{i + 1}</td>
-													<td>{VENDOR_BY_ID[o.vendorId].name}</td>
-													<td class="mono"
-														>{PRODUCT_BY_ID[o.productId].standard}
-														{PRODUCT_BY_ID[o.productId].name}</td
-													>
-													<td class="n">{usd(o.unitPriceUsd)}</td>
-													<td class="n">{o.moq.toLocaleString()}</td>
-													<td class="n">{o.leadTimeDays}d</td>
-												</tr>
-											{/each}
-										</tbody>
-									</table>
-								</div>
-								<ul class="chain">
-									<li class="ok">✓ Verified against requested spec</li>
-									<li class="pay">402 → {DATA_FEE_USDC} USDC paid · tx {txHash}</li>
-									<li class="ok">✓ Full data hash = preview {result.previewHash}</li>
-								</ul>
+								<b>Agent answer</b>
+								<p class="ans">{l.answer}</p>
 							{/if}
 						</div>
 					{/if}
@@ -276,15 +307,11 @@
 			{#if finished}
 				<span class="note">
 					{lanes.web.input.toLocaleString()} vs {lanes.catalog.input.toLocaleString()} input tokens ·
-					{usd(webCost)} vs {usd(catCost + DATA_FEE_USDC)}
+					{usd(lanes.web.cost)} vs {usd(lanes.catalog.cost)}{#if replayed}
+						· replay of a recorded run{/if}
 				</span>
-				<button
-					class="btn btn-primary"
-					type="button"
-					onclick={() => {
-						if (scenario) demo.scenario = scenario.id;
-						scrollToSection('monitor');
-					}}>See it in the data monitor ↓</button
+				<button class="btn btn-primary" type="button" onclick={() => scrollToSection('monitor')}
+					>See it in the data monitor ↓</button
 				>
 			{/if}
 		</div>
@@ -524,45 +551,6 @@
 		gap: 8px;
 		font-size: 13.5px;
 	}
-	.answer ul {
-		list-style: none;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-	.web .answer li {
-		color: var(--red);
-	}
-	.chain .ok {
-		color: var(--accent);
-	}
-	.chain .pay {
-		color: var(--amber);
-		overflow-wrap: anywhere;
-	}
-	.tscroll {
-		overflow-x: auto;
-	}
-	table {
-		border-collapse: collapse;
-		width: 100%;
-		font-size: 12.5px;
-	}
-	th,
-	td {
-		text-align: left;
-		padding: 6px 8px;
-		border-bottom: 1px solid var(--line);
-		white-space: nowrap;
-	}
-	th {
-		color: var(--muted-2);
-		font-weight: 500;
-	}
-	.n {
-		text-align: right;
-		font-family: var(--mono);
-	}
 	.ratiobar {
 		margin-top: -20px;
 		display: flex;
@@ -630,11 +618,74 @@
 	.split {
 		position: relative;
 	}
+	.spec {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		align-items: center;
+		font-size: 13px;
+	}
+	.spec .k {
+		font: 600 11px var(--mono);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--muted-2);
+		margin-right: 4px;
+	}
+	.chip {
+		padding: 3px 10px;
+		border-radius: 999px;
+		border: 1px solid var(--brand-line);
+		color: var(--ink);
+	}
+	.amb {
+		color: var(--amber);
+	}
+	.results {
+		margin: 8px 0 0 18px;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		font-size: 13.5px;
+	}
+	.results a {
+		color: var(--ink);
+		text-decoration: underline;
+		text-decoration-color: var(--line-strong);
+	}
+	.results .mono {
+		display: block;
+		font-size: 12px;
+		color: var(--muted);
+	}
+	.paylink {
+		display: inline-block;
+		margin-top: 10px;
+		font-size: 13px;
+		color: var(--amber);
+	}
+	.ans {
+		margin-top: 6px;
+		font-size: 13.5px;
+		line-height: 1.55;
+		color: var(--muted);
+		white-space: pre-wrap;
+		max-height: 220px;
+		overflow: auto;
+	}
+	.badge.pass {
+		color: var(--accent);
+		border-color: var(--accent);
+	}
+	.badge.fail {
+		color: var(--red);
+		border-color: var(--red);
+	}
 	.seam {
 		position: absolute;
 		z-index: 2;
 		left: 50%;
-		top: 120px;
+		top: -22px;
 		transform: translateX(-50%) scale(calc(0.9 + var(--heat, 0) * 0.5));
 		padding: 8px 14px;
 		border-radius: 999px;
