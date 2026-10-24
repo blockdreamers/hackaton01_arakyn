@@ -1,13 +1,14 @@
-import { redirect } from '@sveltejs/kit';
 import { and, count, desc, eq, gte, isNull } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
 import { apiKeys, apiRequests } from '#lib/server/db/schema.ts';
 import { issueApiKey } from '#lib/server/api.ts';
+import { requireAdmin } from '#lib/server/admin.ts';
 import type { Actions, PageServerLoad } from './$types';
 
+// Hidden: /account replaced this page for users; admins can still open it, everyone else gets a 404
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) redirect(303, '/');
-	const userId = locals.user.id;
+	requireAdmin(locals.user);
+	const userId = locals.user!.id;
 
 	const [apiKey] = await db
 		.select({
@@ -53,7 +54,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	issueKey: async ({ locals }) => {
-		if (!locals.user) redirect(303, '/');
-		return { key: await issueApiKey(locals.user.id) };
+		requireAdmin(locals.user);
+		return { key: await issueApiKey(locals.user!.id) };
 	}
 };

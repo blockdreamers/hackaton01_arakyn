@@ -77,7 +77,7 @@
 				</li>
 			</ol>
 			<code>Authorization: Bearer ac_live_…</code>
-			<a class="btn btn-outline" href="/dashboard"
+			<a class="btn btn-outline" href="/account"
 				>{t('Sign in and get a key', '로그인하고 키 받기')}</a
 			>
 		</article>

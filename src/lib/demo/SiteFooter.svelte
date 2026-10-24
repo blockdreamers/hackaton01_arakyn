@@ -30,9 +30,7 @@
 				</div>
 				<div>
 					<h4>{t('Account', '계정')}</h4>
-					<a href="/account">{t('My account', '내 계정')}</a><a href="/dashboard"
-						>{t('API keys', 'API 키')}</a
-					>
+					<a href="/account">{t('My account', '내 계정')}</a>
 				</div>
 			</div>
 		</footer>
