@@ -73,7 +73,7 @@ Only include offers that match the request. Be concise: a short table and one li
 
 export const CATALOG_TOOL_HINT = `Use the search_offers tool. It searches the Agent Catalog index of product listings (mostly Korean names, prices in KRW). Search with Korean keywords first; try another variant if the first search finds nothing.`;
 
-export const WEB_TOOL_HINT = `Use web search and web fetch to find and confirm offers on online shops.`;
+export const WEB_TOOL_HINT = `Use web search to find candidate shops, then open the product pages with web fetch before answering: search snippets don't show reliable prices, pack sizes or stock. Fetch at least 2 product pages (up to 4) and quote the price you read on each page. Never answer from search snippets alone.`;
 
 /** The question both agents receive, built from the buyer's words and the extracted spec. */
 export function buyerQuestion(query: string, spec: Spec) {
