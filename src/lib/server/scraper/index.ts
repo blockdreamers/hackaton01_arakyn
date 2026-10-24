@@ -12,6 +12,7 @@ import { moglixIn } from './sources/moglix-in.ts';
 import { hormeSg } from './sources/horme-sg.ts';
 import { easyAr } from './sources/easy-ar.ts';
 import { woodiesIe } from './sources/woodies-ie.ts';
+import { aceAe } from './sources/ace-ae.ts';
 import type { Fetcher, ScrapedProduct, ScrapeOptions, SiteScraper } from './types.ts';
 
 export const scrapers: Record<string, SiteScraper> = {
@@ -26,7 +27,8 @@ export const scrapers: Record<string, SiteScraper> = {
 	[moglixIn.code]: moglixIn,
 	[hormeSg.code]: hormeSg,
 	[easyAr.code]: easyAr,
-	[woodiesIe.code]: woodiesIe
+	[woodiesIe.code]: woodiesIe,
+	[aceAe.code]: aceAe
 };
 
 export const USER_AGENT = 'AgentCatalogBot/0.1 (+https://agent-catalog.techtree.kr)';
