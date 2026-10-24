@@ -7,6 +7,7 @@ import { daiso, daisoJp } from './sources/daiso-mcp.ts';
 import { officedepot } from './sources/officedepot.ts';
 import { toolstationUk } from './sources/toolstation-uk.ts';
 import { uline } from './sources/uline.ts';
+import { hoffmannDe } from './sources/hoffmann-de.ts';
 import type { Fetcher, ScrapedProduct, ScrapeOptions, SiteScraper } from './types.ts';
 
 export const scrapers: Record<string, SiteScraper> = {
@@ -16,7 +17,8 @@ export const scrapers: Record<string, SiteScraper> = {
 	[daisoJp.code]: daisoJp,
 	[officedepot.code]: officedepot,
 	[toolstationUk.code]: toolstationUk,
-	[uline.code]: uline
+	[uline.code]: uline,
+	[hoffmannDe.code]: hoffmannDe
 };
 
 const USER_AGENT = 'AgentCatalogBot/0.1 (+https://agent-catalog.techtree.kr)';
