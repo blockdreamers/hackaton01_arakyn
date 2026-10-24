@@ -348,7 +348,7 @@
 			{/if}
 		</div>
 		<button class="btn btn-primary" type="submit" disabled={running || !freeText.trim()}>
-			{running ? t('Racing…', '경주 중…') : t('Race', '경주 시작')}
+			{running ? t('Racing…', '비교 중…') : t('Race', '토큰 소모 비교')}
 		</button>
 		{#if spot}
 			<div class="spot-tip" role="dialog" aria-live="polite">
