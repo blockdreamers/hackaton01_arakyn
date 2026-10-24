@@ -162,3 +162,20 @@ export const monitorReports = pgTable('monitor_reports', {
 	usage: jsonb('usage'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+// Agent wallets users connect on /account (personal_sign verified)
+export const agentWallets = pgTable(
+	'agent_wallets',
+	{
+		id: serial('id').primaryKey(),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		// lowercase 0x address
+		address: text('address').notNull(),
+		chain: text('chain').notNull().default('base-sepolia'),
+		verifiedAt: timestamp('verified_at', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [unique().on(t.userId, t.address)]
+);

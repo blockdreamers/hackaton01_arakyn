@@ -43,6 +43,13 @@
       "when": 1792818832263,
       "tag": "0005_true_vision",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792820566124,
+      "tag": "0006_useful_marvel_zombies",
+      "breakpoints": true
     }
   ]
 }
