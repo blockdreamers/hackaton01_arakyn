@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { demo, scrollToSection } from '#lib/demo/demo-state.svelte.ts';
 	// Floating agent search (bottom right). Two entry points: a preset question, or free text that
 	// Claude turns into a spec. Both run the web agent and the Agent Catalog agent side by side and
 	// stream their real token usage from /api/agent-search.
@@ -60,6 +61,7 @@
 	}
 	let exampleIdx = 0;
 	let query = $state('');
+	let handedOff = $state(false);
 	let withWeb = $state(true);
 	let running = $state(false);
 	let spec = $state<Spec | null>(null);
@@ -86,6 +88,15 @@
 
 	async function run(body: Record<string, unknown>) {
 		if (running) return;
+		// On the home page the big left/right race runs the search, so it isn't run twice.
+		if (demo.raceMounted) {
+			if (demo.raceRunning) return;
+			demo.raceRequest = { id: Date.now(), label: String(body.query ?? query), body };
+			handedOff = true;
+			scrollToSection('race');
+			return;
+		}
+		handedOff = false;
 		running = true;
 		spec = null;
 		specCost = 0;
@@ -220,6 +231,14 @@
 			</form>
 
 			<div class="body">
+				{#if handedOff && demo.raceMounted}
+					<p class="handoff">
+						{demo.raceRunning
+							? 'Running in the token race above, left vs right.'
+							: 'Results are in the token race above.'}
+						<button type="button" onclick={() => scrollToSection('race')}>Show ↑</button>
+					</p>
+				{/if}
 				{#if errorMsg}<p class="err">{errorMsg}</p>{/if}
 				{#if running && !spec}<p class="muted">Reading the request…</p>{/if}
 
@@ -230,8 +249,8 @@
 						</div>
 						<p>{spec.summary}</p>
 						<div class="chips">
-							{#each [...spec.search_terms_ko, ...spec.search_terms_en] as t, i (i)}<span class="chip"
-									>{t}</span
+							{#each [...spec.search_terms_ko, ...spec.search_terms_en] as t, i (i)}<span
+									class="chip">{t}</span
 								>{/each}
 							{#each spec.attributes as a, i (i)}<span class="chip a">{a.field}: {a.value}</span
 								>{/each}
@@ -364,6 +383,25 @@
 		to {
 			opacity: 0.3;
 		}
+	}
+	.handoff {
+		font-size: 13px;
+		color: var(--d-ink);
+		background: #eef2ff;
+		border: 1px solid #c7d2fe;
+		border-radius: 10px;
+		padding: 10px 12px;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 8px;
+	}
+	.handoff button {
+		border: 0;
+		background: none;
+		color: var(--brand);
+		font: 600 13px var(--font);
+		cursor: pointer;
 	}
 	.panel {
 		width: min(380px, calc(100vw - 40px));

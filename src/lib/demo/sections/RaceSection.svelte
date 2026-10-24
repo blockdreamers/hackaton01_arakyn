@@ -1,8 +1,8 @@
 <script lang="ts">
 	import '#lib/demo/theme.css';
 	import Odometer from '#lib/demo/Odometer.svelte';
-	import { scrollToSection } from '#lib/demo/demo-state.svelte.ts';
-	import { onMount } from 'svelte';
+	import { demo, scrollToSection } from '#lib/demo/demo-state.svelte.ts';
+	import { onMount, untrack } from 'svelte';
 
 	// Real race: the question goes to /api/agent-search, which runs two Claude agents (web search vs
 	// Agent Catalog on the live DB) and streams their real token usage.
@@ -23,6 +23,8 @@
 	}
 	interface LaneState {
 		input: number;
+		real: number;
+		est: number;
 		output: number;
 		calls: number;
 		elapsed: number;
@@ -37,6 +39,8 @@
 
 	const empty = (): LaneState => ({
 		input: 0,
+		real: 0,
+		est: 0,
 		output: 0,
 		calls: 0,
 		elapsed: 0,
@@ -88,7 +92,11 @@
 		if (e.type === 'spec') spec = e.spec;
 		else if (e.type === 'step') {
 			const l = lanes[e.lane as Lane];
-			l.input += e.inputTokens;
+			// The web agent's server-side searches report usage only when its turn ends, so while
+			// it works we add a rough estimate per search/fetch; exact usage replaces it at the end.
+			if (e.inputTokens > 0) l.real += e.inputTokens;
+			else if (e.lane === 'web') l.est += estimate(e.label);
+			l.input = Math.max(l.real, l.est);
 			l.output += e.outputTokens;
 			if (e.kind === 'tool') l.calls += 1;
 			l.log.push({ t: e.t, label: e.label, inputTokens: e.inputTokens, tone: e.tone, url: e.url });
@@ -110,12 +118,41 @@
 		else if (e.type === 'error') errorMsg = e.message;
 	}
 
+	const estimate = (label: string) =>
+		label.startsWith('web_fetch')
+			? 9000
+			: label.startsWith('search returned')
+				? 2500
+				: label.startsWith('code_execution')
+					? 700
+					: 0;
+
 	async function race(ev: SubmitEvent) {
 		ev.preventDefault();
 		if (running || !freeText.trim()) return;
+		await start(freeText.trim(), { mode: 'ai', query: freeText.trim(), lanes: ['catalog', 'web'] });
+	}
+
+	// Searches started from the floating dock run here, in the big split view.
+	$effect(() => {
+		const req = demo.raceRequest;
+		if (!req) return;
+		untrack(() => {
+			demo.raceRequest = null;
+			freeText = req.label;
+			start(req.label, req.body);
+		});
+	});
+	$effect(() => {
+		demo.raceRunning = running;
+	});
+
+	async function start(label: string, body: Record<string, unknown>) {
+		if (running) return;
 		reset();
-		asked = freeText.trim();
+		asked = label;
 		running = true;
+		demo.lastQuery = { id: Date.now(), label };
 		abort = new AbortController();
 		const started = performance.now();
 		clock = setInterval(() => {
@@ -127,7 +164,7 @@
 			const res = await fetch('/api/agent-search', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ mode: 'ai', query: asked, lanes: ['catalog', 'web'] }),
+				body: JSON.stringify(body),
 				signal: abort.signal
 			});
 			if (!res.ok || !res.body) throw new Error(await res.text());
@@ -160,7 +197,13 @@
 		freeText = '';
 	}
 
-	onMount(() => reset);
+	onMount(() => {
+		demo.raceMounted = true;
+		return () => {
+			demo.raceMounted = false;
+			reset();
+		};
+	});
 
 	const usd = (v: number) => (v < 0.1 ? `$${v.toFixed(4)}` : `$${v.toFixed(2)}`);
 	const money = (r: Result) =>
@@ -198,6 +241,25 @@
 
 	{#if errorMsg}
 		<div class="missing"><b>Search failed.</b> {errorMsg}</div>
+	{/if}
+	{#if !running && !finished}
+		<div class="split idle" aria-hidden="true">
+			{#each ['web', 'catalog'] as const as lane (lane)}
+				<section class="lane {lane}">
+					<h2>{lane === 'web' ? 'Agent + web search' : 'Agent + Agent Catalog'}</h2>
+					<div class="tok">
+						<div class="k">Input tokens</div>
+						<div class="tokv">0</div>
+					</div>
+					<p class="idle-note">
+						{lane === 'web'
+							? 'Searches shops and opens product pages itself'
+							: 'Asks the Agent Catalog index on the live DB'}
+					</p>
+				</section>
+			{/each}
+		</div>
+		<p class="hint">Ask above, or use the search box at the bottom right. Both run here.</p>
 	{/if}
 	{#if running || finished}
 		<div class="asked">
@@ -617,6 +679,13 @@
 	}
 	.split {
 		position: relative;
+	}
+	.split.idle {
+		opacity: 0.55;
+	}
+	.idle-note {
+		font-size: 13.5px;
+		color: var(--muted);
 	}
 	.spec {
 		display: flex;
