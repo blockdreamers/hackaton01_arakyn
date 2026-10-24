@@ -12,7 +12,7 @@ const { positionals, values } = parseArgs({
 	options: { categories: { type: 'string' }, 'max-pages': { type: 'string' } }
 });
 
-const db = createDb(url);
+const db = createDb(url, { max: 2 });
 await executeRun(
 	db,
 	await startRun(db, positionals[0] ?? 'iaansci', {

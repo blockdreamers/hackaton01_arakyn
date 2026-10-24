@@ -33,7 +33,16 @@ export class BrightData {
 		return (await this.request(`/progress/${snapshotId}`)).json();
 	}
 
+	/** Large snapshots answer 202 {"status":"building"} for a while after they are ready */
 	async download<T>(snapshotId: string): Promise<T[]> {
-		return (await this.request(`/snapshot/${snapshotId}?format=json`)).json();
+		for (let attempt = 1; ; attempt++) {
+			const res = await this.request(`/snapshot/${snapshotId}?format=json`);
+			const body = await res.json();
+			if (Array.isArray(body)) return body;
+			if (res.status !== 202 || attempt >= 40) {
+				throw new Error(`Unexpected snapshot response: ${JSON.stringify(body).slice(0, 200)}`);
+			}
+			await new Promise((r) => setTimeout(r, 30_000));
+		}
 	}
 }
