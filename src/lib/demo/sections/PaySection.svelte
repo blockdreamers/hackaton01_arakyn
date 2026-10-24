@@ -23,13 +23,8 @@
 
 <div class="wrap">
 	<section class="head">
-		<span class="eyebrow">Pricing</span>
-		<h2 class="big">Free quota, then two ways to pay</h2>
-		<p>
-			Every agent can call Agent Catalog for free up to a monthly quota. Bulk searching beyond it is
-			billed per call, and there are two routes to pay for it: an account with an API key, or no
-			account at all with a wallet and x402.
-		</p>
+		<span class="eyebrow">Payment routes</span>
+		<h2 class="big">Two ways to pay</h2>
 	</section>
 	<div class="routes">
 		<article class="route">

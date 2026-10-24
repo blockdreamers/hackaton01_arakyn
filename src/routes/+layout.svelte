@@ -8,7 +8,7 @@
 	let { data, children }: LayoutProps = $props();
 
 	// The one-page demo and the account page draw their own full-bleed chrome.
-	const DEMO_ROUTES = new Set(['/', '/race', '/monitor', '/pay', '/account']);
+	const DEMO_ROUTES = new Set(['/', '/race', '/monitor', '/pay', '/pricing', '/account']);
 	const demo = $derived(DEMO_ROUTES.has(page.route.id ?? ''));
 </script>
 

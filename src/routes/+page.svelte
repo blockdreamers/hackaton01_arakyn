@@ -6,11 +6,9 @@
 	import RollingNumber from '#lib/demo/RollingNumber.svelte';
 	import RaceSection from '#lib/demo/sections/RaceSection.svelte';
 	import MonitorSection from '#lib/demo/sections/MonitorSection.svelte';
-	import PaySection from '#lib/demo/sections/PaySection.svelte';
+	import SiteFooter from '#lib/demo/SiteFooter.svelte';
 	import SearchDock from '#lib/demo/SearchDock.svelte';
 	import EvolutionSlide from '#lib/demo/sections/EvolutionSlide.svelte';
-
-	const year = new Date().getFullYear();
 
 	// Login popup; /account sends signed-out visitors here with ?login=1.
 	let loginOpen = $state(page.url.searchParams.get('login') === '1');
@@ -158,7 +156,7 @@
 					><img src="/brand/logo-white.png" alt="Agent Catalog" width="168" height="28" /></a
 				>
 				<div class="nav-links">
-					{#each [['#race', 'Token race'], ['#monitor', 'Data monitor'], ['#pricing', 'Pricing']] as [href, label] (href)}
+					{#each [['#race', 'Token race'], ['#monitor', 'Data monitor'], ['/pricing', 'Pricing']] as [href, label] (href)}
 						<a class="roll-host" {href}>{@render roll(label)}</a>
 					{/each}
 				</div>
@@ -192,7 +190,9 @@
 				<div class="counters">
 					<div class="counter">
 						<span class="cv"><RollingNumber value={live.products} /></span>
-						<span class="cl">products indexed · {live.sites} {live.sites === 1 ? 'source' : 'sources'}</span>
+						<span class="cl"
+							>products indexed · {live.sites} {live.sites === 1 ? 'source' : 'sources'}</span
+						>
 					</div>
 					<div class="counter">
 						<span class="cv"><RollingNumber value={live.searches} delay={150} /></span>
@@ -238,59 +238,9 @@
 		<MonitorSection />
 	</section>
 
-	<section class="section pricing" id="pricing">
-		<div class="section-head">
-			<span class="eyebrow" data-reveal>Pricing</span>
-			<h2 data-reveal style="--rd:80ms">Free to start. Pay for volume.</h2>
-		</div>
-		<div class="tiers">
-			<div class="tier" data-reveal>
-				<span class="tier-tag">Free</span>
-				<div class="tier-price">1,000 <small>calls / month</small></div>
-				<p>Previews and full offers up to the quota. No card, no wallet.</p>
-			</div>
-			<div class="tier hot" data-reveal style="--rd:90ms">
-				<span class="tier-tag">Bulk</span>
-				<div class="tier-price">$0.02 <small>per call after quota</small></div>
-				<p>Volume pricing for agents that search all day. Search previews stay free.</p>
-			</div>
-		</div>
-		<PaySection />
-	</section>
-
 	<SearchDock />
 
-	<div class="site-footer">
-		<div class="footer-inner">
-			<footer class="footer">
-				<div class="footer-brand">
-					<a class="brand" href="#top"
-						><img src="/brand/logo-color.png" alt="Agent Catalog" width="186" height="31" /></a
-					>
-					<p>A buyable-parts index for AI agents.</p>
-				</div>
-				<div class="footer-cols">
-					<div>
-						<h4>Demo</h4>
-						<a href="#race">Token race</a><a href="#monitor">Data monitor</a><a href="#pricing"
-							>Pricing</a
-						>
-					</div>
-					<div>
-						<h4>Data</h4>
-						<a href="#features">Categories</a><a href="/monitor">Schema</a><a href="#cta"
-							>MCP tools</a
-						>
-					</div>
-					<div>
-						<h4>Account</h4>
-						<a href="/dashboard">Dashboard</a>
-					</div>
-				</div>
-			</footer>
-			<p class="copyright">© {year} Agent Catalog. Built for the agent economy.</p>
-		</div>
-	</div>
+	<SiteFooter />
 </div>
 
 <style>
@@ -578,46 +528,6 @@
 		font-size: 13px;
 		color: var(--muted);
 	}
-	.tiers {
-		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: 18px;
-		max-width: 860px;
-		margin: 0 auto;
-	}
-	.tier {
-		padding: 28px;
-		border-radius: var(--radius);
-		background: var(--glass);
-		border: 1px solid var(--line);
-		backdrop-filter: blur(14px);
-	}
-	.tier.hot {
-		border-color: var(--brand-line);
-		background:
-			radial-gradient(120% 120% at 0% 0%, rgba(31, 75, 255, 0.14), transparent 55%), var(--glass-2);
-	}
-	.tier-tag {
-		font: 600 11px var(--mono);
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-		color: var(--accent);
-	}
-	.tier-price {
-		margin: 12px 0 8px;
-		font-size: 36px;
-		font-weight: 800;
-	}
-	.tier-price small {
-		font-size: 15px;
-		font-weight: 500;
-		color: var(--muted);
-	}
-	.tier p {
-		color: var(--muted);
-		font-size: 15px;
-		line-height: 1.6;
-	}
 
 	.demo-section {
 		position: relative;
@@ -633,9 +543,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
-	}
-	.tiers {
-		margin-bottom: 24px;
 	}
 	.feature-grid {
 		display: grid;
@@ -699,73 +606,15 @@
 		color: var(--muted);
 	}
 
-	.site-footer {
-		position: relative;
-		z-index: 1;
-		background: #fff;
-		color: #111827;
-	}
-	.footer-inner {
-		max-width: var(--maxw);
-		margin: 0 auto;
-		padding: 64px 24px 40px;
-	}
 	.brand img {
 		display: block;
 		height: 28px;
 		width: auto;
 	}
-	.footer .brand img {
-		height: 31px;
-	}
-	.footer {
-		display: flex;
-		justify-content: space-between;
-		gap: 48px;
-		flex-wrap: wrap;
-	}
-	.footer-brand p {
-		margin-top: 14px;
-		color: #4b5563;
-		font-size: 14px;
-	}
-	.footer-cols {
-		display: flex;
-		gap: 56px;
-		flex-wrap: wrap;
-	}
-	.footer-cols div {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-		font-size: 14px;
-		color: #4b5563;
-	}
-	.footer-cols h4 {
-		font-size: 12px;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-		color: #9ca3af;
-		font-weight: 600;
-	}
-	.footer-cols a:hover {
-		color: var(--brand);
-	}
-	.copyright {
-		margin-top: 48px;
-		padding-top: 24px;
-		border-top: 1px solid #e5e7eb;
-		text-align: center;
-		font-size: 13px;
-		color: #9ca3af;
-	}
 
 	@media (max-width: 980px) {
 		.feature-grid {
 			grid-template-columns: repeat(2, 1fr);
-		}
-		.tiers {
-			grid-template-columns: 1fr;
 		}
 	}
 	@media (max-width: 720px) {
@@ -789,9 +638,6 @@
 		}
 		.auth .login {
 			display: none;
-		}
-		.footer {
-			flex-direction: column;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
