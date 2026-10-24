@@ -3,11 +3,14 @@ import type { Db } from '../db/client.ts';
 import { products, scrapeRuns, sites } from '../db/schema.ts';
 import { iaansci } from './sources/iaansci.ts';
 import { navimro } from './sources/navimro.ts';
+import { daiso, daisoJp } from './sources/daiso-mcp.ts';
 import type { Fetcher, ScrapedProduct, ScrapeOptions, SiteScraper } from './types.ts';
 
 export const scrapers: Record<string, SiteScraper> = {
 	[iaansci.code]: iaansci,
-	[navimro.code]: navimro
+	[navimro.code]: navimro,
+	[daiso.code]: daiso,
+	[daisoJp.code]: daisoJp
 };
 
 const USER_AGENT = 'AgentCatalogBot/0.1 (+https://agent-catalog.techtree.kr)';
@@ -102,14 +105,23 @@ export async function executeRun(
 	// Saved page by page so memory stays flat on large sites. A product listed in several
 	// categories collects them during the run. A full run replaces categories from earlier
 	// runs; a partial run (some categories / pages) only adds to them.
-	const partial = !!(options.categories?.length || options.maxPages);
+	// Keyword sources keep groups in `keywords` and never cover the whole site.
+	const byKeyword = scraper.groups === 'keywords';
+	const partial = byKeyword || !!(options.categories?.length || options.maxPages);
 	const union = sql`(select array(select distinct unnest(${products.categories} || excluded.categories)))`;
-	const save = async (items: ScrapedProduct[], category: string) => {
+	const keywordUnion = sql`(select array(select distinct unnest(${products.keywords} || excluded.keywords)))`;
+	const save = async (items: ScrapedProduct[], group: string) => {
 		const unique = [...new Map(items.map((p) => [p.externalId, p])).values()];
 		if (unique.length === 0) return;
 		await db
 			.insert(products)
-			.values(unique.map((p) => ({ ...p, siteId: site.id, categories: [category] })))
+			.values(
+				unique.map((p) => ({
+					...p,
+					siteId: site.id,
+					...(byKeyword ? { keywords: [group] } : { categories: [group] })
+				}))
+			)
 			.onConflictDoUpdate({
 				target: [products.siteId, products.externalId],
 				set: {
@@ -119,10 +131,14 @@ export async function executeRun(
 					imageUrl: sql`excluded.image_url`,
 					url: sql`excluded.url`,
 					brand: sql`excluded.brand`,
-					categories: partial
-						? union
-						: sql`case when ${products.lastSeenAt} >= ${run.startedAt.toISOString()}
-							then ${union} else excluded.categories end`,
+					...(byKeyword
+						? { keywords: keywordUnion }
+						: {
+								categories: partial
+									? union
+									: sql`case when ${products.lastSeenAt} >= ${run.startedAt.toISOString()}
+										then ${union} else excluded.categories end`
+							}),
 					active: true,
 					lastSeenAt: sql`now()`
 				}
@@ -131,9 +147,13 @@ export async function executeRun(
 
 	try {
 		const all = await scraper.categories(fetchPage);
-		const categories = options.categories?.length
-			? all.filter((c) => options.categories!.includes(c.id))
-			: all;
+		const picked = options.categories ?? [];
+		// keyword sources search any given keyword; category sources pick from the site's list
+		const categories = !picked.length
+			? all
+			: byKeyword
+				? picked.map((k) => ({ id: k, name: k }))
+				: all.filter((c) => picked.includes(c.id));
 		log(`[${site.code}] ${categories.length}/${all.length} categories`);
 
 		for (const category of categories) {

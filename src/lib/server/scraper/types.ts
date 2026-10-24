@@ -32,6 +32,11 @@ export interface SiteScraper {
 	currency: string;
 	/** minimum delay between requests */
 	delayMs: number;
+	/**
+	 * 'keywords' for search-based sources: groups are search keywords (stored in
+	 * products.keywords) and a run never covers the whole site
+	 */
+	groups?: 'categories' | 'keywords';
 	categories(fetch: Fetcher): Promise<Category[]>;
 	/** Yields one page of products at a time */
 	categoryPages(

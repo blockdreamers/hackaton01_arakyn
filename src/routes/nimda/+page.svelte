@@ -30,7 +30,12 @@
 			{#each data.scrapers as code (code)}<option>{code}</option>{/each}
 		</select>
 	</label>
-	<label>카테고리 (쉼표, 비우면 전체) <input name="categories" placeholder="c-23,c-24" /></label>
+	<label
+		>카테고리 또는 키워드 (쉼표, 비우면 기본 목록 전체) <input
+			name="categories"
+			placeholder="c-23,c-24 / 육각볼트,베어링"
+		/></label
+	>
 	<label>카테고리당 최대 페이지 (비우면 전체) <input name="maxPages" type="number" min="1" /></label
 	>
 	<button>다시 긁기</button>
