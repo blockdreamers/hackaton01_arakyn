@@ -43,7 +43,9 @@
 	let open = $state(true);
 	$effect(() => {
 		try {
-			if (localStorage.getItem(KEY) === '1') open = false;
+			const saved = localStorage.getItem(KEY);
+			// on phones start minimized so the panel doesn't cover the hero
+			if (saved === '1' || (saved === null && innerWidth < 640)) open = false;
 		} catch {
 			// storage unavailable: stay open
 		}

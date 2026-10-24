@@ -424,7 +424,7 @@
 		text-align: center;
 		width: 100%;
 		max-width: 1024px;
-		margin: 48px auto 0;
+		margin: 0 auto;
 		padding: 0 16px 64px 17px;
 	}
 	.pill {
@@ -611,6 +611,12 @@
 		width: auto;
 	}
 
+	/* sit above the visual centre so the copy clears the bright ring */
+	@media (min-width: 721px) {
+		.hero-main {
+			transform: translateY(-9vh);
+		}
+	}
 	@media (max-width: 980px) {
 		.feature-grid {
 			grid-template-columns: repeat(2, 1fr);
