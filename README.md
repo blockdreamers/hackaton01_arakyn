@@ -23,18 +23,33 @@ bun run start      # runs build/index.js on Bun
 
 ## Database
 
+Schema lives in `src/lib/server/db/schema.ts`. After changing it, generate a migration and commit it:
+
 ```sh
-bun run db:push    # sync schema to DATABASE_URL
+bun run db:generate   # writes SQL to drizzle/
+bun run db:migrate    # apply locally (deploys also apply it)
 bun run db:studio
 ```
 
+## Auth
+
+Google Identity Services sign-in. Set `GOOGLE_CLIENT_ID` (OAuth client, type "Web application") in `.env`.
+Authorized JavaScript origins: `https://agent-catalog.techtree.kr`, `http://localhost:5173`.
+The ID token is verified server-side (`/auth/google`), users and sessions are stored in Postgres.
+
 ## Deploy
+
+Every push to `main` deploys via GitHub Actions (`.github/workflows/deploy.yml`). Manual deploy from a
+machine with the `codev-app` SSH alias:
 
 ```sh
 bun run deploy
 ```
 
-Builds locally, rsyncs `build/` + `package.json` + `bun.lock` to `codev-app:/var/www/codev`, runs
-`bun install --production` there, and restarts the `codev` systemd service.
+Builds, rsyncs `build/`, `drizzle/` and package files to `codev-app:/var/www/codev`, runs
+`bun run db:migrate` there, and restarts the `codev` systemd service. Runtime env lives in
+`/var/www/codev/.env` on the server (`DATABASE_URL`, `GOOGLE_CLIENT_ID`, `HOST`, `PORT`).
 
-Server layout: Cloudflare (proxied) → nginx :443 (Let's Encrypt cert, Cloudflare real-IP) → Bun :3000.
+Server layout: Cloudflare (proxied, Full strict) → nginx :443 (Let's Encrypt, Cloudflare real-IP,
+unknown hosts dropped) → Bun :3000. adapter-node 6 derives the origin from the Host header (protocol
+defaults to `https`), so `ORIGIN` is not used.
