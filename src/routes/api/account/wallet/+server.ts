@@ -1,9 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
 import { verifyMessage } from 'viem';
-import { db } from '#lib/server/db/index.ts';
-import { wallets } from '#lib/server/db/schema.ts';
-import { isMissingTable } from '#lib/server/apikeys.ts';
+import { saveWallet } from '#lib/server/local-store.ts';
 import type { RequestHandler } from './$types';
 
 const NONCE_COOKIE = 'wallet_nonce';
@@ -40,17 +38,6 @@ export const POST: RequestHandler = async ({ locals, request, cookies }) => {
 		signature
 	}).catch(() => false);
 	if (!ok) error(400, 'Signature does not match the address');
-	try {
-		await db
-			.insert(wallets)
-			.values({ userId: locals.user.id, address: addr, verifiedAt: new Date() })
-			.onConflictDoUpdate({
-				target: [wallets.userId, wallets.address],
-				set: { verifiedAt: new Date() }
-			});
-	} catch (err) {
-		if (isMissingTable(err)) error(503, 'Account tables are not migrated yet');
-		throw err;
-	}
+	await saveWallet(locals.user.id, addr);
 	return json({ ok: true, address: addr });
 };

@@ -54,7 +54,7 @@ export async function getTree(): Promise<MonitorTree> {
 			where ${products.active} group by c order by n desc`
 	);
 	const [lastRun] = await db
-		.select({ at: scrapeRuns.finishedAt })
+		.select({ at: scrapeRuns.finishedAt, started: scrapeRuns.startedAt })
 		.from(scrapeRuns)
 		.orderBy(desc(scrapeRuns.startedAt))
 		.limit(1);
@@ -100,7 +100,7 @@ export async function getTree(): Promise<MonitorTree> {
 			sites: siteCount,
 			products: productCount,
 			categories: catRows.length,
-			lastScraped: lastRun?.at ? lastRun.at.toISOString() : null
+			lastScraped: (lastRun?.at ?? lastRun?.started)?.toISOString() ?? null
 		},
 		categories
 	};
@@ -174,6 +174,7 @@ export async function monitorSearch(q: string) {
 		.sort((a, b) => b.matches - a.matches)
 		.slice(0, 4);
 	const rows: TraceRow[] = [];
+	const seen = new Set<number>();
 	for (const c of scanCats) {
 		const sample = await db.execute<{
 			id: number;
@@ -195,6 +196,8 @@ export async function monitorSearch(q: string) {
 		);
 		const list = [...sample].sort((a, b) => a.id - b.id);
 		for (const r of list) {
+			if (seen.has(r.id)) continue;
+			seen.add(r.id);
 			const m = hit(r.name);
 			rows.push({
 				id: r.id,

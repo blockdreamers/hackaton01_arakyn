@@ -1,6 +1,7 @@
 // Per-call history for the personal dashboard: one entry per lane per agent search.
-// The teammate owns the database tables; until a table for this exists, entries are only
-// written to the server log.
+// The teammate owns the database tables; until a table for this exists, entries go to the
+// demo-only local store.
+import { appendCall } from './local-store.ts';
 
 export interface CallLogEntry {
 	userId?: number | null;
@@ -23,5 +24,9 @@ export interface CallLogEntry {
 }
 
 export async function logCall(entry: CallLogEntry): Promise<void> {
-	console.info('[agent-call]', JSON.stringify({ ...entry, spec: undefined }));
+	try {
+		await appendCall(entry);
+	} catch (err) {
+		console.error('logCall failed', err);
+	}
 }

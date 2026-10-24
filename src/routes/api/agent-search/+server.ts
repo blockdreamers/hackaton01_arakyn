@@ -68,9 +68,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 							const wait = at - (Date.now() - start);
 							if (wait > 0) await new Promise((r) => setTimeout(r, Math.min(wait, 4000)));
 							send(
-								event.type === 'summary'
-									? { ...event, replayed: true, spentUsd: await spentUsd() }
-									: event
+								event.type === 'step' && event.label.startsWith('code_execution {')
+									? { ...event, label: 'code_execution (filtering search results)' }
+									: event.type === 'summary'
+										? { ...event, replayed: true, spentUsd: await spentUsd() }
+										: event
 							);
 						}
 						controller.close();

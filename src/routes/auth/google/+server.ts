@@ -17,7 +17,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })
 		.then((ticket) => ticket.getPayload())
 		.catch(() => undefined);
-	if (!payload?.sub || !payload.email) error(401, 'Invalid Google credential');
+	if (!payload?.sub || !payload.email || !payload.email_verified)
+		error(401, 'Invalid Google credential');
 
 	const profile = { email: payload.email, name: payload.name, picture: payload.picture };
 	const [user] = await db

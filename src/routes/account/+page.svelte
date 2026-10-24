@@ -82,13 +82,6 @@
 		<h1>API usage dashboard</h1>
 	</div>
 
-	{#if !data.migrated}
-		<p class="warn">
-			Account tables are not migrated yet, so keys, wallets and call history can't be saved. Run the
-			pending migration to enable them.
-		</p>
-	{/if}
-
 	<section class="tiles">
 		<div class="tile"><span class="k">Total calls</span><span class="v">{num(s.calls)}</span></div>
 		<div class="tile"><span class="k">Tokens used</span><span class="v">{num(s.tokens)}</span></div>
@@ -140,7 +133,7 @@
 			<h2>API keys <span class="tag">Route 1</span></h2>
 			<form method="POST" action="?/createKey" use:enhance class="row">
 				<input name="name" placeholder="Key name, e.g. procurement-agent" maxlength="60" />
-				<button class="btn btn-primary sm" disabled={!data.migrated}>Create key</button>
+				<button class="btn btn-primary sm">Issue new key (replaces current)</button>
 			</form>
 			{#if form?.newKey}
 				<div class="newkey">
@@ -156,7 +149,6 @@
 					>
 				</div>
 			{/if}
-			{#if form?.error}<p class="warn">{form.error}</p>{/if}
 			{#if data.keys.length}
 				<ul class="list">
 					{#each data.keys as k (k.id)}
@@ -190,11 +182,7 @@
 				Connect the wallet your agent pays from. You sign a message to prove you own it; no funds
 				move. Network: Base Sepolia (testnet).
 			</p>
-			<button
-				class="btn btn-primary sm"
-				type="button"
-				onclick={connectWallet}
-				disabled={connecting || !data.migrated}
+			<button class="btn btn-primary sm" type="button" onclick={connectWallet} disabled={connecting}
 				>{connecting ? 'Waiting for wallet…' : 'Connect wallet'}</button
 			>
 			{#if walletMsg}<p class="muted small">{walletMsg}</p>{/if}

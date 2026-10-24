@@ -1,57 +1,59 @@
-import { fail, redirect } from '@sveltejs/kit';
-import { and, count, desc, eq } from 'drizzle-orm';
+import { redirect } from '@sveltejs/kit';
+import { and, count, desc, eq, gte, isNull } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
-import { products, scrapeRuns, sites } from '#lib/server/db/schema.ts';
-import { executeRun, startRun } from '#lib/server/scraper/index.ts';
+import { apiKeys, apiRequests } from '#lib/server/db/schema.ts';
+import { issueApiKey } from '#lib/server/api.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) redirect(303, '/');
+	const userId = locals.user.id;
 
-	const siteStats = await db
+	const [apiKey] = await db
 		.select({
-			code: sites.code,
-			name: sites.name,
-			country: sites.country,
-			currency: sites.currency,
-			products: count(products.id)
+			prefix: apiKeys.prefix,
+			createdAt: apiKeys.createdAt,
+			lastUsedAt: apiKeys.lastUsedAt
 		})
-		.from(sites)
-		.leftJoin(products, and(eq(products.siteId, sites.id), eq(products.active, true)))
-		.groupBy(sites.id);
+		.from(apiKeys)
+		.where(and(eq(apiKeys.userId, userId), isNull(apiKeys.revokedAt)));
 
-	const runs = await db
+	const since = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+	const countSince = async (from?: Date) => {
+		const [row] = await db
+			.select({ n: count() })
+			.from(apiRequests)
+			.where(
+				and(eq(apiRequests.userId, userId), from ? gte(apiRequests.createdAt, from) : undefined)
+			);
+		return row.n;
+	};
+	const [day, week, total] = await Promise.all([
+		countSince(since(1)),
+		countSince(since(7)),
+		countSince()
+	]);
+
+	const recent = await db
 		.select({
-			id: scrapeRuns.id,
-			site: sites.code,
-			status: scrapeRuns.status,
-			pagesFetched: scrapeRuns.pagesFetched,
-			productsFound: scrapeRuns.productsFound,
-			error: scrapeRuns.error,
-			startedAt: scrapeRuns.startedAt,
-			finishedAt: scrapeRuns.finishedAt
+			id: apiRequests.id,
+			method: apiRequests.method,
+			path: apiRequests.path,
+			query: apiRequests.query,
+			status: apiRequests.status,
+			createdAt: apiRequests.createdAt
 		})
-		.from(scrapeRuns)
-		.innerJoin(sites, eq(scrapeRuns.siteId, sites.id))
-		.orderBy(desc(scrapeRuns.id))
-		.limit(10);
+		.from(apiRequests)
+		.where(eq(apiRequests.userId, userId))
+		.orderBy(desc(apiRequests.id))
+		.limit(20);
 
-	return { siteStats, runs };
+	return { apiKey: apiKey ?? null, usage: { day, week, total }, recent };
 };
 
 export const actions: Actions = {
-	scrape: async ({ locals, request }) => {
+	issueKey: async ({ locals }) => {
 		if (!locals.user) redirect(303, '/');
-		const site = String((await request.formData()).get('site') ?? 'iaansci');
-
-		let started;
-		try {
-			started = await startRun(db, site);
-		} catch (e) {
-			return fail(409, { error: e instanceof Error ? e.message : String(e) });
-		}
-		// runs in the background; progress is stored in scrape_runs
-		executeRun(db, started).catch(() => {});
-		return { started: started.run.id };
+		return { key: await issueApiKey(locals.user.id) };
 	}
 };

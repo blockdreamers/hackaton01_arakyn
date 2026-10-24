@@ -15,6 +15,20 @@
       "when": 1792811424395,
       "tag": "0001_young_human_fly",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792812807941,
+      "tag": "0002_good_kulan_gath",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792812872002,
+      "tag": "0003_romantic_supernaut",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,7 @@
 
 	let { data, children }: LayoutProps = $props();
 
-	// The four demo screens draw their own full-bleed chrome.
+	// The one-page demo and the account page draw their own full-bleed chrome.
 	const DEMO_ROUTES = new Set(['/', '/race', '/monitor', '/pay', '/account']);
 	const demo = $derived(DEMO_ROUTES.has(page.route.id ?? ''));
 </script>
@@ -23,6 +23,7 @@
 		<a href={resolve('/')}><img src={favicon} alt="Agent Catalog" width="32" height="32" /></a>
 		{#if data.user}
 			<span>{data.user.name ?? data.user.email}</span>
+			{#if data.isAdmin}<a href={resolve('/nimda')}>관리자</a>{/if}
 			<form method="POST" action="/auth/logout"><button>로그아웃</button></form>
 		{:else}
 			<GoogleSignIn />

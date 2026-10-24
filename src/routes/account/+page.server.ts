@@ -1,21 +1,32 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { and, count, desc, eq, gte, isNull, sql, sum } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
-import { apiCalls, apiKeys, wallets } from '#lib/server/db/schema.ts';
-import { generateKey, isMissingTable } from '#lib/server/apikeys.ts';
+import { apiKeys, apiRequests } from '#lib/server/db/schema.ts';
+import { issueApiKey } from '#lib/server/api.ts';
+import { listWallets, readCalls, removeWallet } from '#lib/server/local-store.ts';
+import type { CallLogEntry } from '#lib/server/calls.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 const PAGE_SIZE = 20;
 // Example free quota until pricing is set.
 const FREE_QUOTA = 1000;
 
-async function guarded<T>(fn: () => Promise<T>, empty: T): Promise<{ value: T; missing: boolean }> {
-	try {
-		return { value: await fn(), missing: false };
-	} catch (err) {
-		if (isMissingTable(err)) return { value: empty, missing: true };
-		throw err;
-	}
+interface Row {
+	key: string;
+	id: number;
+	query: string;
+	lane: string;
+	mode: string;
+	verifyResult: string;
+	requestedAt: Date;
+	receivedAt: Date;
+	paidUsdc: number;
+	paymentTx: string | null;
+	inputTokens: number;
+	outputTokens: number;
+	costUsd: number;
+	spec: unknown;
+	verifyDetail: unknown;
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -25,65 +36,51 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
 	const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-	const keys = await guarded(
-		() =>
-			db
-				.select({
-					id: apiKeys.id,
-					name: apiKeys.name,
-					prefix: apiKeys.prefix,
-					createdAt: apiKeys.createdAt,
-					lastUsedAt: apiKeys.lastUsedAt,
-					revokedAt: apiKeys.revokedAt
-				})
-				.from(apiKeys)
-				.where(eq(apiKeys.userId, user.id))
-				.orderBy(desc(apiKeys.createdAt)),
-		[]
-	);
-	const userWallets = await guarded(
-		() =>
-			db.select().from(wallets).where(eq(wallets.userId, user.id)).orderBy(desc(wallets.createdAt)),
-		[]
-	);
-	const calls = await guarded(
-		() =>
-			db
-				.select()
-				.from(apiCalls)
-				.where(eq(apiCalls.userId, user.id))
-				.orderBy(desc(apiCalls.id))
-				.limit(PAGE_SIZE)
-				.offset((page - 1) * PAGE_SIZE),
-		[]
-	);
-	const totals = await guarded(
-		() =>
-			db
-				.select({
-					calls: count(apiCalls.id),
-					inputTokens: sum(apiCalls.inputTokens),
-					outputTokens: sum(apiCalls.outputTokens),
-					paid: sum(apiCalls.paidUsdc),
-					passed: sql<number>`count(*) filter (where ${apiCalls.verifyResult} = 'pass')`,
-					verified: sql<number>`count(*) filter (where ${apiCalls.verifyResult} <> 'skipped')`
-				})
-				.from(apiCalls)
-				.where(eq(apiCalls.userId, user.id))
-				.then((r) => r[0]),
-		undefined
-	);
-	const monthCalls = await guarded(
-		() =>
-			db
-				.select({ n: count(apiCalls.id) })
-				.from(apiCalls)
-				.where(and(eq(apiCalls.userId, user.id), gte(apiCalls.requestedAt, monthStart)))
-				.then((r) => r[0]?.n ?? 0),
-		0
-	);
+	const [keys, requests, wallets, agentCalls] = await Promise.all([
+		db.select().from(apiKeys).where(eq(apiKeys.userId, user.id)).orderBy(desc(apiKeys.createdAt)),
+		db
+			.select()
+			.from(apiRequests)
+			.where(eq(apiRequests.userId, user.id))
+			.orderBy(desc(apiRequests.createdAt))
+			.limit(500),
+		listWallets(user.id),
+		readCalls()
+	]);
 
-	const t = totals.value;
+	// One history: agent searches from the site (tokens, verification, payment) and public API calls.
+	const rows: Row[] = [
+		...(agentCalls as unknown as CallLogEntry[])
+			.filter((c) => c.userId === user.id)
+			.map((c) => ({
+				...c,
+				key: 'a',
+				requestedAt: new Date(c.requestedAt),
+				receivedAt: new Date(c.receivedAt),
+				paymentTx: c.paymentTx ?? null
+			})),
+		...requests.map((r) => ({
+			key: 'r',
+			query: `${r.method} ${r.path}${r.query ?? ''}`,
+			lane: 'api',
+			mode: `HTTP ${r.status}`,
+			verifyResult: 'skipped',
+			requestedAt: r.createdAt,
+			receivedAt: r.createdAt,
+			paidUsdc: 0,
+			paymentTx: null,
+			inputTokens: 0,
+			outputTokens: 0,
+			costUsd: 0,
+			spec: null,
+			verifyDetail: null
+		}))
+	]
+		.sort((a, b) => +a.requestedAt - +b.requestedAt)
+		.map((r, i) => ({ ...r, id: i + 1 }))
+		.reverse() as Row[];
+
+	const verified = rows.filter((r) => r.verifyResult !== 'skipped');
 	return {
 		account: {
 			name: user.name,
@@ -92,37 +89,30 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			createdAt: user.createdAt,
 			googleSub: user.googleSub.slice(0, 4) + '••••' + user.googleSub.slice(-3)
 		},
-		migrated: !(keys.missing || userWallets.missing || calls.missing),
-		keys: keys.value,
-		wallets: userWallets.value,
-		calls: calls.value,
+		migrated: true,
+		keys: keys.map((k) => ({ ...k, name: 'API key' })),
+		wallets,
+		calls: rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
 		page,
-		hasNext: calls.value.length === PAGE_SIZE,
+		hasNext: rows.length > page * PAGE_SIZE,
 		summary: {
-			calls: Number(t?.calls ?? 0),
-			tokens: Number(t?.inputTokens ?? 0) + Number(t?.outputTokens ?? 0),
-			paidUsdc: Number(t?.paid ?? 0),
-			passRate: t && Number(t.verified) > 0 ? Number(t.passed) / Number(t.verified) : null,
-			quotaUsed: Number(monthCalls.value),
+			calls: rows.length,
+			tokens: rows.reduce((n, r) => n + r.inputTokens + r.outputTokens, 0),
+			paidUsdc: rows.reduce((n, r) => n + r.paidUsdc, 0),
+			passRate: verified.length
+				? verified.filter((r) => r.verifyResult === 'pass').length / verified.length
+				: null,
+			quotaUsed: rows.filter((r) => r.requestedAt >= monthStart).length,
 			quota: FREE_QUOTA
 		}
 	};
 };
 
 export const actions: Actions = {
-	createKey: async ({ locals, request }) => {
+	// One active key per user (same rule as /dashboard): issuing a new one revokes the old one.
+	createKey: async ({ locals }) => {
 		if (!locals.user) return fail(401);
-		const name = String((await request.formData()).get('name') ?? '').trim() || 'Default key';
-		const { key, prefix, keyHash } = generateKey();
-		try {
-			await db
-				.insert(apiKeys)
-				.values({ userId: locals.user.id, name: name.slice(0, 60), prefix, keyHash });
-		} catch (err) {
-			if (isMissingTable(err)) return fail(503, { error: 'Account tables are not migrated yet.' });
-			throw err;
-		}
-		return { newKey: key };
+		return { newKey: await issueApiKey(locals.user.id) };
 	},
 	revokeKey: async ({ locals, request }) => {
 		if (!locals.user) return fail(401);
@@ -137,8 +127,7 @@ export const actions: Actions = {
 	},
 	disconnectWallet: async ({ locals, request }) => {
 		if (!locals.user) return fail(401);
-		const id = Number((await request.formData()).get('id'));
-		await db.delete(wallets).where(and(eq(wallets.id, id), eq(wallets.userId, locals.user.id)));
-		return { disconnected: id };
+		await removeWallet(locals.user.id, Number((await request.formData()).get('id')));
+		return { disconnected: true };
 	}
 };

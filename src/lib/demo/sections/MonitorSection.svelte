@@ -26,6 +26,7 @@
 	let res = $state<MonitorSearchResult | null>(null);
 	let open = $state<Record<string, boolean>>({});
 	let catStatus = $state<Record<string, 'match' | 'skip'>>({});
+	let catMatches = $state<Record<string, number>>({});
 	let rowStatus = $state<Record<number, 'scan' | 'match' | 'skip'>>({});
 	let shownRows = $state<Record<string, TraceRow[]>>({});
 	let cursor = $state<string | null>(null);
@@ -96,6 +97,7 @@
 		running = true;
 		res = null;
 		catStatus = {};
+		catMatches = {};
 		rowStatus = {};
 		shownRows = {};
 		open = {};
@@ -135,6 +137,7 @@
 			if (my !== token) return;
 			await follow(`cat:${c.name}`);
 			catStatus[c.name] = c.matches > 0 ? 'match' : 'skip';
+			catMatches[c.name] = c.matches;
 			evaluated++;
 			await wait(70);
 		}
@@ -273,7 +276,7 @@
 							<span class="caret">{isOpen ? '▾' : '▸'}</span><span class="nm">{c.name}/</span><span
 								class="cm"
 								># {st === 'match'
-									? `${fmt(res?.categories.find((x) => x.name === c.name)?.matches ?? 0)} match`
+									? `${fmt(catMatches[c.name] ?? 0)} match`
 									: st === 'skip'
 										? 'skipped by index'
 										: fmt(c.count)}</span
