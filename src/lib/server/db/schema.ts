@@ -101,6 +101,8 @@ export interface RunProgress {
 	completed: string[];
 	/** category in progress and the last page saved */
 	current?: { id: string; page: number };
+	/** ISO time of the last progress write (used to spot stalled runs) */
+	updatedAt?: string;
 }
 
 export type Site = typeof sites.$inferSelect;
@@ -138,3 +140,25 @@ export const apiRequests = pgTable(
 	},
 	(t) => [index().on(t.userId, t.createdAt)]
 );
+
+// Results of the monitor's per-site checks, kept to detect changes between runs
+export const siteChecks = pgTable(
+	'site_checks',
+	{
+		id: serial('id').primaryKey(),
+		siteCode: text('site_code').notNull(),
+		kind: text('kind', { enum: ['policy', 'parser'] }).notNull(),
+		ok: boolean('ok').notNull(),
+		data: jsonb('data').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index().on(t.siteCode, t.kind, t.createdAt)]
+);
+
+export const monitorReports = pgTable('monitor_reports', {
+	id: serial('id').primaryKey(),
+	model: text('model').notNull(),
+	report: text('report').notNull(),
+	usage: jsonb('usage'),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});

@@ -94,6 +94,27 @@ bun run amazon trigger                 # all keywords, <= 90 per keyword, <= 950
 bun run amazon collect                 # waits for the snapshot, stores products (site amazon_us, US/USD)
 ```
 
+## Monitor agent
+
+A Claude agent (`claude-opus-5-5`, SDK tool runner) checks every scraper and writes a Korean report
+(stored in `monitor_reports`, shown on `/nimda`). Its tools are deterministic checks in
+`src/lib/server/monitor/checks.ts`:
+
+- `check_site_policy`: robots.txt rules for our UA (diffed against the last check), our fetched URLs
+  vs Disallow rules, AI-crawler blocks, crawl-delay vs our delay, bot challenges on the home page
+- `check_site_parser`: runs the real scraper on the first category's first page; item count,
+  missing fields, category count vs last check
+- `get_scrape_status`: failed / stalled runs (no progress for 30 min), last success, product counts
+
+```sh
+bun run monitor --checks-only --sites iaansci,navimro   # checks only, no API key needed
+bun run monitor [--sites …]                              # agent report, needs ANTHROPIC_API_KEY
+```
+
+Or "점검 실행" on `/nimda` (needs `ANTHROPIC_API_KEY` in the server `.env`). Not scheduled; checks
+make real requests (hoffmann_de discovery alone is ~55 requests at 5 s). Server-side refusal
+fallback (`fallbacks: "default"`) is on.
+
 ## Deploy
 
 Every push to `main` deploys via GitHub Actions (`.github/workflows/deploy.yml`). Manual deploy from a

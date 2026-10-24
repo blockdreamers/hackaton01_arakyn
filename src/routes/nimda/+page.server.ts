@@ -1,10 +1,15 @@
 import { fail } from '@sveltejs/kit';
 import { and, count, desc, eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
-import { products, scrapeRuns, sites } from '#lib/server/db/schema.ts';
+import { monitorReports, products, scrapeRuns, sites } from '#lib/server/db/schema.ts';
+import { runMonitorAgent } from '#lib/server/monitor/agent.ts';
 import { executeRun, scrapers, startRun } from '#lib/server/scraper/index.ts';
 import { requireAdmin } from '#lib/server/admin.ts';
 import type { Actions, PageServerLoad } from './$types';
+
+// one monitor run at a time per server process
+let monitorRunning = false;
+let monitorError: string | null = null;
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals.user);
@@ -38,7 +43,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(desc(scrapeRuns.id))
 		.limit(10);
 
-	return { siteStats, runs, scrapers: Object.keys(scrapers) };
+	const [report] = await db.select().from(monitorReports).orderBy(desc(monitorReports.id)).limit(1);
+
+	return {
+		siteStats,
+		runs,
+		scrapers: Object.keys(scrapers),
+		report: report ?? null,
+		monitorRunning,
+		monitorError
+	};
 };
 
 export const actions: Actions = {
@@ -66,5 +80,17 @@ export const actions: Actions = {
 		// runs in the background; progress is stored in scrape_runs
 		executeRun(db, started).catch(() => {});
 		return { started: started.run.id };
+	},
+	monitor: async ({ locals }) => {
+		requireAdmin(locals.user);
+		if (!process.env.ANTHROPIC_API_KEY)
+			return fail(400, { error: 'ANTHROPIC_API_KEY is not set on the server' });
+		if (monitorRunning) return fail(409, { error: '점검이 이미 실행 중입니다' });
+		monitorRunning = true;
+		monitorError = null;
+		runMonitorAgent(db, { log: () => {} })
+			.catch((e) => (monitorError = e instanceof Error ? e.message : String(e)))
+			.finally(() => (monitorRunning = false));
+		return { monitorStarted: true };
 	}
 };

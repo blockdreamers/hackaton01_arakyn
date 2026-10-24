@@ -21,7 +21,7 @@ export const scrapers: Record<string, SiteScraper> = {
 	[hoffmannDe.code]: hoffmannDe
 };
 
-const USER_AGENT = 'AgentCatalogBot/0.1 (+https://agent-catalog.techtree.kr)';
+export const USER_AGENT = 'AgentCatalogBot/0.1 (+https://agent-catalog.techtree.kr)';
 // a run still "running" after this long was killed (e.g. server restart)
 const STALE_MS = 24 * 60 * 60 * 1000;
 
@@ -197,6 +197,7 @@ export async function executeRun(
 				await save(items, category.name);
 				found += items.length;
 				progress.current = { id: category.id, page: page++ };
+				progress.updatedAt = new Date().toISOString();
 				await db
 					.update(scrapeRuns)
 					.set({ pagesFetched, progress })
@@ -204,6 +205,7 @@ export async function executeRun(
 			}
 			progress.completed.push(category.id);
 			delete progress.current;
+			progress.updatedAt = new Date().toISOString();
 			const productsFound = await countSeen();
 			await db
 				.update(scrapeRuns)
