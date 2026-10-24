@@ -147,9 +147,9 @@
 
 		// stage 2: open the busiest matching categories and walk their rows
 		steps.filter = { s: 'on', v: 'checking rows…' };
-		const byCat = new Map<string, TraceRow[]>();
-		for (const row of data.rows) byCat.set(row.category, [...(byCat.get(row.category) ?? []), row]);
-		for (const [cat, rows] of byCat) {
+		const byCat: Record<string, TraceRow[]> = {};
+		for (const row of data.rows) (byCat[row.category] ??= []).push(row);
+		for (const [cat, rows] of Object.entries(byCat)) {
 			if (my !== token) return;
 			open[cat] = true;
 			shownRows[cat] = rows;
