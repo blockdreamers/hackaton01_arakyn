@@ -19,7 +19,8 @@
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
 		"scrape": "bun --env-file=.env scripts/scrape.ts",
-		"amazon": "bun --env-file=.env scripts/amazon.ts"
+		"amazon": "bun --env-file=.env scripts/amazon.ts",
+		"monitor": "bun --env-file=.env scripts/monitor.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -51,6 +52,7 @@
 		"google-auth-library": "^11.3.1",
 		"node-html-parser": "^9.0.5",
 		"postgres": "^3.4.9",
-		"viem": "2.21.45"
+		"viem": "2.21.45",
+		"zod": "^4.6.7"
 	}
 }

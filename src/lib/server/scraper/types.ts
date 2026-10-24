@@ -32,6 +32,8 @@ export interface SiteScraper {
 	baseUrl: string;
 	country: string;
 	currency: string;
+	/** host we actually request (default: baseUrl), e.g. an API in front of the shop */
+	crawlBaseUrl?: string;
 	/** whether prices include VAT / sales tax */
 	priceIncludesTax: boolean;
 	/** minimum delay between requests */

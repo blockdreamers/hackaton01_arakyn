@@ -37,7 +37,19 @@
 			placeholder="c-23,c-24 / 육각볼트,베어링"
 		/></label
 	>
-	<label>카테고리당 최대 페이지 (비우면 전체) <input name="maxPages" type="number" min="1" /></label
+	<label
+		>이어서 할 수집 # (중단된 수집의 진행 지점부터) <input
+			name="resume"
+			type="number"
+			min="1"
+		/></label
+	>
+	<label
+		>카테고리·키워드당 최대 페이지 (비우면 전체, 다이소는 최대 3) <input
+			name="maxPages"
+			type="number"
+			min="1"
+		/></label
 	>
 	<button>다시 긁기</button>
 </form>
@@ -68,3 +80,23 @@
 		{/each}
 	</tbody>
 </table>
+
+<h2>사이트 점검 (에이전트)</h2>
+<p>
+	정책(robots.txt·봇 차단), 사이트 구조 변경(파서), 수집 상태를 에이전트가 점검하고 보고서를 씁니다.
+	사이트마다 실제 요청을 보내므로 수 분~수십 분 걸립니다. CLI: <code>bun run monitor</code>
+</p>
+<form method="POST" action="?/monitor" use:enhance>
+	<button disabled={data.monitorRunning}>{data.monitorRunning ? '점검 중…' : '점검 실행'}</button>
+</form>
+{#if form?.monitorStarted}<p>점검을 시작했습니다. 끝나면 새로고침해서 보고서를 확인하세요.</p>{/if}
+{#if data.monitorError}<p>마지막 점검 실패: {data.monitorError}</p>{/if}
+{#if data.report}
+	<h3>
+		최근 보고서 #{data.report.id} ({data.report.createdAt.toLocaleString('ko-KR')}, {data.report
+			.model})
+	</h3>
+	<pre style="white-space: pre-wrap">{data.report.report}</pre>
+{:else}
+	<p>아직 보고서가 없습니다.</p>
+{/if}
