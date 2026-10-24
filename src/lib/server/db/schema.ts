@@ -41,7 +41,9 @@ export const sites = pgTable('sites', {
 	// ISO 3166-1 alpha-2, e.g. KR
 	country: char('country', { length: 2 }).notNull(),
 	// ISO 4217, e.g. KRW
-	currency: char('currency', { length: 3 }).notNull()
+	currency: char('currency', { length: 3 }).notNull(),
+	// whether stored prices include VAT / sales tax as shown by the site
+	priceIncludesTax: boolean('price_includes_tax')
 });
 
 export const products = pgTable(
@@ -85,12 +87,21 @@ export const scrapeRuns = pgTable('scrape_runs', {
 	// job id at an external provider (e.g. Bright Data snapshot id)
 	externalJobId: text('external_job_id'),
 	input: jsonb('input'),
+	// where a category run got to, so a stopped run can be resumed
+	progress: jsonb('progress').$type<RunProgress>(),
 	pagesFetched: integer('pages_fetched').notNull().default(0),
 	productsFound: integer('products_found').notNull().default(0),
 	error: text('error'),
 	startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
 	finishedAt: timestamp('finished_at', { withTimezone: true })
 });
+
+export interface RunProgress {
+	/** category ids finished in this run */
+	completed: string[];
+	/** category in progress and the last page saved */
+	current?: { id: string; page: number };
+}
 
 export type Site = typeof sites.$inferSelect;
 export type ScrapeRun = typeof scrapeRuns.$inferSelect;

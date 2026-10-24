@@ -41,7 +41,7 @@
 <pre>curl -H "Authorization: Bearer {key}" "{base}/api/v1/products?q=현미경&country=KR&limit=5"</pre>
 
 <h3>GET /api/v1/sites</h3>
-<p>수집 중인 사이트 목록과 국가, 통화, 상품 수.</p>
+<p>수집 중인 사이트 목록과 국가, 통화, 세금 포함 여부(<code>priceIncludesTax</code>), 상품 수.</p>
 <pre>curl -H "Authorization: Bearer {key}" "{base}/api/v1/sites"</pre>
 
 <h2>사용 현황</h2>

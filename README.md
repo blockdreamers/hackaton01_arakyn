@@ -41,7 +41,8 @@ The ID token is verified server-side (`/auth/google`), users and sessions are st
 
 Collects product name, price, image URL, link, brand and categories from shop listing pages into
 `products`. Each shop is a row in `sites` with its country (ISO 3166-1, e.g. `KR`) and currency
-(ISO 4217, e.g. `KRW`); prices are stored in the site's currency.
+(ISO 4217, e.g. `KRW`); prices are stored in the site's currency, and `sites.price_includes_tax`
+says whether they include VAT / sales tax as shown by the shop.
 
 | site                                   | listing                                                                   | size (Oct 2026)                                      | delay                    |
 | -------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------ |
@@ -59,7 +60,8 @@ Daiso goes through the public [daiso-mcp](https://github.com/hmmhmmhm/daiso-mcp)
 Default keywords are the 100 MRO terms in Korean / Japanese (`src/lib/server/scraper/keywords/mro.ts`);
 any keywords can be passed instead. Keyword sources store the search term in `products.keywords`.
 
-- CLI: `bun run scrape <site> [--categories c-23,c-24 | --categories 육각볼트,베어링] [--max-pages 10]`
+- CLI: `bun run scrape <site> [--categories c-23,c-24 | --categories 육각볼트,베어링] [--max-pages 10] [--resume <runId>]`
+- Resume: every page saves `scrape_runs.progress`; `--resume <runId>` (or the field on `/nimda`) skips finished categories and continues from the last saved page (navimro, iaansci, officedepot; other sources restart the unfinished category)
 - Or `/nimda` (admin only): pick site and optional range, runs in the background, progress in `scrape_runs`
 
 Only robots.txt-allowed pages, identified as `AgentCatalogBot`. Products are saved page by page.

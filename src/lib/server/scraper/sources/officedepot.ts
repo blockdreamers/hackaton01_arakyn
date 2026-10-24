@@ -60,6 +60,7 @@ export const officedepot: SiteScraper = {
 	country: 'KR',
 	currency: 'KRW',
 	// listing pages are ~500KB
+	priceIncludesTax: true,
 	delayMs: 1500,
 
 	async categories(fetch) {
@@ -76,11 +77,11 @@ export const officedepot: SiteScraper = {
 		return categories;
 	},
 
-	async *categoryPages(fetch, category: Category, maxPages) {
+	async *categoryPages(fetch, category: Category, maxPages, startPage = 1) {
 		const first = await fetch(listUrl(category.id, 1));
 		const pages = Math.min(Math.ceil(parseTotal(first) / PAGE_SIZE), maxPages);
-		yield parseProducts(first);
-		for (let page = 2; page <= pages; page++) {
+		if (startPage <= 1) yield parseProducts(first);
+		for (let page = Math.max(2, startPage); page <= pages; page++) {
 			const items = parseProducts(await fetch(listUrl(category.id, page)));
 			if (items.length === 0) break;
 			yield items;

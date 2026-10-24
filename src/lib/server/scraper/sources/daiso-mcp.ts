@@ -43,6 +43,7 @@ export const daiso: SiteScraper = {
 	baseUrl: 'https://www.daisomall.co.kr',
 	country: 'KR',
 	currency: 'KRW',
+	priceIncludesTax: true,
 	delayMs: 2000,
 	groups: 'keywords',
 
@@ -74,6 +75,7 @@ export const daisoJp: SiteScraper = {
 	baseUrl: 'https://jp.daisonet.com',
 	country: 'JP',
 	currency: 'JPY',
+	priceIncludesTax: true,
 	delayMs: 2000,
 	groups: 'keywords',
 

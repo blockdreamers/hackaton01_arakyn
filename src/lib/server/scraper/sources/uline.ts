@@ -86,6 +86,7 @@ export const uline: SiteScraper = {
 	country: 'US',
 	currency: 'USD',
 	// no crawl-delay in robots.txt; product line pages can be ~1MB
+	priceIncludesTax: false,
 	delayMs: 2000,
 
 	async categories(fetch) {

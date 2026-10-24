@@ -8,7 +8,9 @@ export const amazonUs = {
 	name: 'Amazon.com',
 	baseUrl: 'https://www.amazon.com',
 	country: 'US',
-	currency: 'USD'
+	currency: 'USD',
+	// US sales tax is added at checkout
+	priceIncludesTax: false
 };
 
 export function triggerKeywordDiscovery(

@@ -50,6 +50,7 @@ export const navimro: SiteScraper = {
 	country: 'KR',
 	currency: 'KRW',
 	// listing pages are ~2MB
+	priceIncludesTax: false,
 	delayMs: 2000,
 
 	async categories(fetch) {
@@ -64,11 +65,11 @@ export const navimro: SiteScraper = {
 		return [...found].map(([id, name]) => ({ id, name }));
 	},
 
-	async *categoryPages(fetch, category: Category, maxPages) {
+	async *categoryPages(fetch, category: Category, maxPages, startPage = 1) {
 		const first = await fetch(`${BASE}/s/${category.id}/`);
 		const pages = Math.min(lastPage(first, category.id), maxPages);
-		yield parseProducts(first);
-		for (let page = 2; page <= pages; page++) {
+		if (startPage <= 1) yield parseProducts(first);
+		for (let page = Math.max(2, startPage); page <= pages; page++) {
 			const items = parseProducts(await fetch(`${BASE}/s/${category.id}/page-${page}/?hits=90`));
 			if (items.length === 0) break;
 			yield items;

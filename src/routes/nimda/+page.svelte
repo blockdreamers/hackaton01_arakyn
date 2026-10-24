@@ -10,13 +10,14 @@
 <h2>사이트</h2>
 <table>
 	<thead>
-		<tr><th>사이트</th><th>국가</th><th>통화</th><th>상품 수</th></tr>
+		<tr><th>사이트</th><th>국가</th><th>통화</th><th>세금 포함</th><th>상품 수</th></tr>
 	</thead>
 	<tbody>
 		{#each data.siteStats as s (s.code)}
 			<tr
-				><td>{s.name} ({s.code})</td><td>{s.country}</td><td>{s.currency}</td><td>{s.products}</td
-				></tr
+				><td>{s.name} ({s.code})</td><td>{s.country}</td><td>{s.currency}</td><td
+					>{s.priceIncludesTax == null ? '?' : s.priceIncludesTax ? '포함' : '별도'}</td
+				><td>{s.products}</td></tr
 			>
 		{/each}
 	</tbody>

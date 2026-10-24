@@ -93,6 +93,7 @@ export const hoffmannDe: SiteScraper = {
 	country: 'DE',
 	currency: 'EUR',
 	// robots.txt Crawl-delay: 5
+	priceIncludesTax: true,
 	delayMs: 5000,
 
 	async categories(fetch) {

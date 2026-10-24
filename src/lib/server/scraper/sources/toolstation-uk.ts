@@ -76,6 +76,7 @@ export const toolstationUk: SiteScraper = {
 	baseUrl: BASE,
 	country: 'GB',
 	currency: 'GBP',
+	priceIncludesTax: true,
 	delayMs: 2000,
 
 	async categories(fetch) {
