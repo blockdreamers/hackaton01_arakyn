@@ -174,12 +174,11 @@
 				</div>
 			</nav>
 			<div class="hero-main">
-				<div class="pill"><span class="dot"></span>Search index for AI agents</div>
-				<h1 class="hero-title">Find Any Part With<br />A Fraction Of The Tokens</h1>
+				<div class="pill"><span class="dot"></span>Domain search for AI agents</div>
+				<h1 class="hero-title">The Search Engine<br />Built for Agents</h1>
 				<p class="hero-sub">
-					Agent Catalog turns shopping pages into agent-ready catalog data for standard parts. One
-					call returns verified, comparable offers instead of hundreds of thousands of tokens of web
-					pages.
+					A domain-specific search engine for AI agents. Find the right part fast, and spend a
+					fraction of the tokens.
 				</p>
 				<div class="hero-actions">
 					<a class="roll-host cta-primary" href="#race">{@render roll('Try a live search')}</a>
