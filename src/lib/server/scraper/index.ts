@@ -10,6 +10,7 @@ import { uline } from './sources/uline.ts';
 import { hoffmannDe } from './sources/hoffmann-de.ts';
 import { moglixIn } from './sources/moglix-in.ts';
 import { hormeSg } from './sources/horme-sg.ts';
+import { easyAr } from './sources/easy-ar.ts';
 import type { Fetcher, ScrapedProduct, ScrapeOptions, SiteScraper } from './types.ts';
 
 export const scrapers: Record<string, SiteScraper> = {
@@ -22,7 +23,8 @@ export const scrapers: Record<string, SiteScraper> = {
 	[uline.code]: uline,
 	[hoffmannDe.code]: hoffmannDe,
 	[moglixIn.code]: moglixIn,
-	[hormeSg.code]: hormeSg
+	[hormeSg.code]: hormeSg,
+	[easyAr.code]: easyAr
 };
 
 export const USER_AGENT = 'AgentCatalogBot/0.1 (+https://agent-catalog.techtree.kr)';

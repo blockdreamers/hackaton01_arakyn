@@ -54,6 +54,7 @@ says whether they include VAT / sales tax as shown by the shop.
 | `hoffmann_de` (Hoffmann Group, DE/EUR) | `/DE/de/hom/{slug}/c/{code}?page=N` (0-based, ≤100 pages), 291 categories             | ~150–250k products, ~3–4k pages, prices inc. 19% VAT | 5 s (robots crawl-delay) |
 | `moglix_in` (Moglix, IN/INR)           | `/{l0}/{l1}/{id}?page=N`, 524 categories, products in the SSR state JSON              | ~200–500k products, 40/page, prices inc. GST         | 2 s                      |
 | `horme_sg` (Horme, SG/SGD)             | `ajax_products_query.aspx?c={id}&page=N` (the listing's own fragment), 180 categories | ~22k products, 28/page, prices inc. GST              | 2 s                      |
+| `easy_ar` (Easy, AR/ARS)               | `/{dept}/{category}?page=N` (VTEX `__STATE__`), 116 categories, ≤119 pages each       | ~27k products, 21/page, prices inc. 21% IVA          | 2 s                      |
 | `daiso` (다이소, KR)                   | daiso-mcp `GET /api/daiso/products?q=`                                                | keyword search, 100/page, ≤3 pages/keyword           | 2 s                      |
 | `daiso_jp` (DAISO Japan, JP/JPY)       | daiso-mcp `GET /api/daiso-jp/products?q=`                                             | keyword search, 24/page, ≤3 pages/keyword            | 2 s                      |
 
