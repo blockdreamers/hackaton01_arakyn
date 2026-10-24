@@ -7,6 +7,7 @@
 	import { onMount, tick, untrack } from 'svelte';
 	import { demo } from '#lib/demo/demo-state.svelte.ts';
 	import { slide } from 'svelte/transition';
+	import { flip } from 'svelte/animate';
 	import { countSearch } from '#lib/demo/stats.ts';
 	import type { MonitorTree, MonitorSearchResult, Product, TraceRow } from '#lib/server/monitor.ts';
 
@@ -51,6 +52,14 @@
 	let replayMs = $state(0);
 	let token = 0;
 	let treeEl = $state<HTMLDivElement>();
+	// during a search the tree folds shut, then matching folders float to the top
+	let sorted = $state(false);
+	let calm = $state(false);
+	const FOLD = 300;
+	const matchFirst = <T,>(list: T[], key: (x: T) => string, hits: Record<string, number>) =>
+		sorted ? [...list].sort((a, b) => (hits[key(b)] ?? 0) - (hits[key(a)] ?? 0)) : list;
+	const siteList = $derived(tree ? matchFirst(tree.sites, (x) => x.code, siteMatches) : []);
+	const catList = $derived(tree ? matchFirst(tree.categories, (x) => x.name, catMatches) : []);
 
 	function freshSteps() {
 		return Object.fromEntries(STEPS.map((s) => [s.key, { s: 'idle', v: '' }])) as Record<
@@ -107,6 +116,7 @@
 	};
 
 	onMount(async () => {
+		calm = reduced();
 		try {
 			const r = await fetch('/api/monitor/tree');
 			if (!r.ok) throw new Error(String(r.status));
@@ -167,6 +177,13 @@
 		dropped = 0;
 		evaluated = 0;
 		countSearch();
+		// fold every open folder shut and put the tree back in its natural order
+		const hadOpen = Object.values(open).some(Boolean);
+		open = {};
+		sorted = false;
+		treeEl?.scrollTo({ top: 0, behavior: reduced() ? 'auto' : 'smooth' });
+		if (hadOpen && !reduced()) await sleep(FOLD + 80);
+		if (my !== token) return;
 
 		await begin('request', `“${text}”`);
 		note(`request  search_offers("${text}")`);
@@ -208,7 +225,9 @@
 				open[`site:${st.code}`] = true;
 			}
 			evaluated++;
-			await wait(120);
+			await wait(st.rows.length ? 380 : 120);
+			// fold it again before moving on, so the walk reads as one folder at a time
+			open[`site:${st.code}`] = false;
 		}
 		const hitSites = data.sites.filter((x) => x.matches > 0).length;
 		note(`sites    ${hitSites}/${data.sites.length} shops have matches`);
@@ -224,6 +243,10 @@
 			await wait(70);
 		}
 		const hitCats = data.categories.filter((c) => c.matches > 0).length;
+		// matching folders float to the top
+		cursor = null;
+		sorted = true;
+		await wait(650);
 		steps.index = {
 			s: 'done',
 			v: `${hitSites} of ${data.sites.length} sites · ${hitCats} of ${data.categories.length} categories`
@@ -234,8 +257,15 @@
 		await begin('filter', 'checking rows…');
 		const byCat: Record<string, TraceRow[]> = {};
 		for (const row of data.rows) (byCat[row.category] ??= []).push(row);
+		let prev: string | null = null;
 		for (const [cat, rows] of Object.entries(byCat)) {
 			if (my !== token) return;
+			// accordion: close the folder just walked before opening the next
+			if (prev) {
+				open[prev] = false;
+				await wait(FOLD);
+			}
+			prev = cat;
 			open[cat] = true;
 			shownRows[cat] = rows;
 			await tick();
@@ -250,6 +280,8 @@
 				evaluated++;
 			}
 		}
+		// end state: matching shops open with their rows, next to the last folder walked
+		for (const st of data.sites) if (st.rows.length) open[`site:${st.code}`] = true;
 		steps.filter = { s: 'done', v: `${fmt(data.total)} matches → top 3 by price` };
 		note(`filter   ${fmt(data.total)} rows match, ranked by unit price`);
 		await wait(250);
@@ -438,9 +470,14 @@
 
 	<section class="console">
 		<div class="console-h">
+			<h3>Ask the index</h3>
 			<p>Type what an agent would ask. The engine walks the live index below, step by step.</p>
 		</div>
-		<form class="ask" onsubmit={submit}>
+		<form class="ask" class:busy={running} onsubmit={submit}>
+			<svg class="ask-ic" viewBox="0 0 24 24" aria-hidden="true">
+				<circle cx="11" cy="11" r="7" />
+				<path d="m20 20-4-4" />
+			</svg>
 			<input
 				bind:value={q}
 				placeholder="Search the index, e.g. LED, 캐스터, socket screw"
@@ -451,13 +488,13 @@
 				>{running ? 'Running…' : 'Run'}</button
 			>
 		</form>
-		<p class="hint">
-			Try
-			{#each HINTS as h, i (h)}<button type="button" onclick={() => ask(h)} disabled={running}
+		<div class="hint">
+			<span class="hint-l">Try</span>
+			{#each HINTS as h (h)}<button type="button" onclick={() => ask(h)} disabled={running}
 					>{h}</button
-				>{i < HINTS.length - 1 ? ' · ' : ''}{/each}
-			{#if relayed}<span class="relay">· also running in the token race above</span>{/if}
-		</p>
+				>{/each}
+			{#if relayed}<span class="relay"><i></i>also running in the token race above</span>{/if}
+		</div>
 	</section>
 
 	<div class="grid">
@@ -474,66 +511,75 @@
 						>
 					</div>
 					<div class="row folder d1"><span class="nm">sites/</span></div>
-					{#each tree.sites as st (st.code)}
+					{#each siteList as st (st.code)}
 						{@const ss = siteStatus[st.code]}
 						{@const isOpen = open[`site:${st.code}`]}
-						<button
-							type="button"
-							class="row folder d2 {ss ?? ''}"
-							class:cur={cursor === `site:${st.code}`}
-							data-row={`site:${st.code}`}
-							onclick={() => (open[`site:${st.code}`] = !isOpen)}
-						>
-							<span class="caret">{isOpen ? '▾' : '▸'}</span><span class="nm site">{st.code}/</span
-							><span class="cm"
-								># {ss === 'match'
-									? `${fmt(siteMatches[st.code] ?? 0)} match`
-									: ss === 'skip'
-										? 'no match'
-										: `${st.name} · ${st.currency} · ${fmt(st.count)}`}</span
+						<div class="node" animate:flip={{ duration: calm ? 0 : 560 }}>
+							<button
+								type="button"
+								class="row folder d2 {ss ?? ''}"
+								class:cur={cursor === `site:${st.code}`}
+								data-row={`site:${st.code}`}
+								onclick={() => (open[`site:${st.code}`] = !isOpen)}
 							>
-						</button>
-						{#if isOpen}
-							{#each siteRows[st.code] ?? st.samples as p (p.id)}
-								{@render prow(p, 'd3', siteRows[st.code] ? 'match' : undefined)}
-							{/each}
-						{/if}
+								<span class="caret">{isOpen ? '▾' : '▸'}</span><span class="nm site"
+									>{st.code}/</span
+								><span class="cm"
+									># {ss === 'match'
+										? `${fmt(siteMatches[st.code] ?? 0)} match`
+										: ss === 'skip'
+											? 'no match'
+											: `${st.name} · ${st.currency} · ${fmt(st.count)}`}</span
+								>
+							</button>
+							{#if isOpen}
+								<div class="kids" transition:slide={{ duration: calm ? 0 : FOLD }}>
+									{#each siteRows[st.code] ?? st.samples as p (p.id)}
+										{@render prow(p, 'd3', siteRows[st.code] ? 'match' : undefined)}
+									{/each}
+								</div>
+							{/if}
+						</div>
 					{/each}
 					<div class="row folder d1">
 						<span class="nm">categories/</span><span class="cm"
 							># top {tree.categories.length} of {tree.totals.categories}</span
 						>
 					</div>
-					{#each tree.categories as c (c.name)}
+					{#each catList as c (c.name)}
 						{@const st = catStatus[c.name]}
 						{@const isOpen = open[c.name]}
-						<button
-							type="button"
-							class="row folder d2 {st ?? ''}"
-							class:cur={cursor === `cat:${c.name}`}
-							data-row={`cat:${c.name}`}
-							onclick={() => (open[c.name] = !isOpen)}
-						>
-							<span class="caret">{isOpen ? '▾' : '▸'}</span><span class="nm">{c.name}/</span><span
-								class="cm"
-								># {st === 'match'
-									? `${fmt(catMatches[c.name] ?? 0)} match`
-									: st === 'skip'
-										? 'skipped by index'
-										: fmt(c.count)}</span
+						<div class="node" animate:flip={{ duration: calm ? 0 : 560 }}>
+							<button
+								type="button"
+								class="row folder d2 {st ?? ''}"
+								class:cur={cursor === `cat:${c.name}`}
+								data-row={`cat:${c.name}`}
+								onclick={() => (open[c.name] = !isOpen)}
 							>
-						</button>
-						{#if isOpen}
-							{#if shownRows[c.name]}
-								{#each shownRows[c.name] as p (p.id)}
-									{@render prow(p, 'd3', rowStatus[p.id], p.reason)}
-								{/each}
-							{:else}
-								{#each c.products as p (p.id)}
-									{@render prow(p, 'd3')}
-								{/each}
+								<span class="caret">{isOpen ? '▾' : '▸'}</span><span class="nm">{c.name}/</span
+								><span class="cm"
+									># {st === 'match'
+										? `${fmt(catMatches[c.name] ?? 0)} match`
+										: st === 'skip'
+											? 'skipped by index'
+											: fmt(c.count)}</span
+								>
+							</button>
+							{#if isOpen}
+								<div class="kids" transition:slide={{ duration: calm ? 0 : FOLD }}>
+									{#if shownRows[c.name]}
+										{#each shownRows[c.name] as p (p.id)}
+											{@render prow(p, 'd3', rowStatus[p.id], p.reason)}
+										{/each}
+									{:else}
+										{#each c.products as p (p.id)}
+											{@render prow(p, 'd3')}
+										{/each}
+									{/if}
+								</div>
 							{/if}
-						{/if}
+						</div>
 					{/each}
 				{:else}
 					<div class="row"><span class="cm">{loadError || 'loading…'}</span></div>
@@ -741,12 +787,39 @@
 	}
 	.ask {
 		display: flex;
+		align-items: center;
 		gap: 10px;
-		padding: 7px 7px 7px 18px;
+		width: 100%;
+		padding: 7px 7px 7px 16px;
 		border-radius: 999px;
-		background: var(--glass-2);
-		border: 1px solid var(--brand-line);
+		background: rgba(6, 10, 24, 0.85);
+		border: 1px solid var(--line-strong);
 		max-width: 720px;
+		transition:
+			border-color 0.2s,
+			box-shadow 0.2s;
+	}
+	.ask:focus-within {
+		border-color: var(--brand-line);
+		box-shadow:
+			0 0 0 4px rgba(61, 107, 255, 0.14),
+			0 12px 40px -16px rgba(31, 75, 255, 0.55);
+	}
+	.ask.busy {
+		border-color: rgba(93, 240, 168, 0.45);
+	}
+	.ask-ic {
+		width: 18px;
+		height: 18px;
+		flex: none;
+		fill: none;
+		stroke: var(--muted-2);
+		stroke-width: 2;
+		stroke-linecap: round;
+		transition: stroke 0.2s;
+	}
+	.ask:focus-within .ask-ic {
+		stroke: var(--brand-2);
 	}
 	.ask input {
 		flex: 1;
@@ -764,17 +837,38 @@
 		padding: 10px 22px;
 	}
 	.hint {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
 		font-size: 13px;
 		color: var(--muted-2);
-		margin-top: -4px;
+	}
+	.hint-l {
+		margin-right: 2px;
 	}
 	.hint button {
-		background: none;
-		border: 0;
-		color: var(--brand-2);
-		font: inherit;
+		font: 12.5px var(--mono);
+		color: var(--ink);
+		padding: 5px 12px;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		background: var(--glass);
 		cursor: pointer;
-		padding: 0 2px;
+		transition:
+			border-color 0.15s,
+			background 0.15s,
+			color 0.15s;
+	}
+	.hint button:hover:not(:disabled) {
+		border-color: var(--brand-line);
+		background: rgba(31, 75, 255, 0.16);
+		color: #fff;
+	}
+	.hint button:disabled {
+		opacity: 0.45;
+		cursor: default;
 	}
 	.grid {
 		display: grid;
@@ -883,6 +977,44 @@
 	.row.cur {
 		background: rgba(31, 75, 255, 0.22);
 		box-shadow: inset 3px 0 0 var(--brand-2);
+		animation: scanpulse 0.9s ease-in-out infinite;
+	}
+	/* a folder that just matched flashes once; matched rows slide in */
+	.folder.match {
+		animation: hit 0.7s ease-out;
+	}
+	.row.prow.match {
+		animation: rowin 0.45s ease-out;
+	}
+	@keyframes scanpulse {
+		50% {
+			background: rgba(31, 75, 255, 0.34);
+		}
+	}
+	@keyframes hit {
+		0% {
+			background: rgba(255, 210, 122, 0.32);
+		}
+		100% {
+			background: transparent;
+		}
+	}
+	@keyframes rowin {
+		0% {
+			background: rgba(255, 210, 122, 0.22);
+			transform: translateX(-6px);
+		}
+		100% {
+			background: transparent;
+			transform: none;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.row.cur,
+		.folder.match,
+		.row.prow.match {
+			animation: none;
+		}
 	}
 	.rank {
 		font-size: 11px;
@@ -1215,15 +1347,36 @@
 	/* search console: its own block, set apart from the overview */
 	.console {
 		margin-top: 22px;
-		padding-top: 26px;
-		border-top: 1px solid var(--line);
+		padding: 30px 24px 24px;
+		border: 1px solid var(--line);
+		border-radius: var(--radius-lg);
+		background:
+			radial-gradient(120% 140% at 50% 0%, rgba(31, 75, 255, 0.14), transparent 60%), var(--glass);
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
+		align-items: center;
+		text-align: center;
+		gap: 16px;
 	}
 	.relay {
-		margin-left: 6px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		margin-left: 4px;
 		color: var(--accent);
+		font-size: 12.5px;
+	}
+	.relay i {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--accent);
+		animation: blink 1.4s infinite;
+	}
+	.console-h h3 {
+		font: 700 22px var(--font);
+		color: var(--ink);
+		letter-spacing: -0.01em;
 	}
 	.console-h p {
 		margin-top: 6px;

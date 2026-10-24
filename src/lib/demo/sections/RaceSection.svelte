@@ -3,6 +3,7 @@
 	import Odometer from '#lib/demo/Odometer.svelte';
 	import { demo, scrollToSection } from '#lib/demo/demo-state.svelte.ts';
 	import { onMount, untrack } from 'svelte';
+	import { PRESETS } from '#lib/demo/presets.ts';
 
 	// Real race: the question goes to /api/agent-search, which runs two Claude agents (web search vs
 	// Agent Catalog on the live DB) and streams their real token usage.
@@ -78,8 +79,20 @@
 	let abort: AbortController | null = null;
 	let clock: ReturnType<typeof setInterval> | null = null;
 
+	// What the counters show: they chase the real totals in small steps, so the odometers keep
+	// rolling upward instead of jumping once per tool call.
+	let shown = $state<Record<Lane, number>>({ web: 0, catalog: 0 });
+	function chase() {
+		for (const lane of ['web', 'catalog'] as Lane[]) {
+			const target = lanes[lane].input;
+			const d = target - shown[lane];
+			if (d === 0) continue;
+			shown[lane] = Math.abs(d) < 40 ? target : Math.round(shown[lane] + d * 0.28);
+		}
+	}
+
 	// Live multiplier: climbs while the web agent keeps reading pages and the catalog agent stays small.
-	const ratio = $derived(lanes.catalog.input > 0 ? lanes.web.input / lanes.catalog.input : 0);
+	const ratio = $derived(shown.catalog > 0 ? shown.web / shown.catalog : 0);
 	const ratioShown = $derived(ratio >= 10 ? Math.round(ratio) : Math.round(ratio * 10) / 10);
 	// 0..1 on a log scale up to 300×, drives the meter, size and glow
 	const heat = $derived(ratio > 1 ? Math.min(1, Math.log10(ratio) / Math.log10(300)) : 0);
@@ -90,6 +103,7 @@
 		if (clock) clearInterval(clock);
 		clock = null;
 		lanes = { web: empty(), catalog: empty() };
+		shown = { web: 0, catalog: 0 };
 		spec = null;
 		running = false;
 		finished = false;
@@ -136,6 +150,17 @@
 				: label.startsWith('code_execution')
 					? 700
 					: 0;
+
+	// A ready question shown in light grey inside the empty box. Its parts are in our DB and a click
+	// replays a recorded real run (no API cost); it rotates to the next preset each time.
+	let suggestIdx = $state(0);
+	const suggestion = $derived(PRESETS[suggestIdx % PRESETS.length]);
+	function runSuggestion() {
+		const p = suggestion;
+		suggestIdx++;
+		freeText = p.question;
+		start(p.question, { mode: 'preset', presetId: p.id, lanes: ['catalog', 'web'] });
+	}
 
 	async function race(ev: SubmitEvent) {
 		ev.preventDefault();
@@ -209,7 +234,9 @@
 
 	onMount(() => {
 		demo.raceMounted = true;
+		const chaser = setInterval(chase, 110);
 		return () => {
+			clearInterval(chaser);
 			demo.raceMounted = false;
 			reset();
 		};
@@ -233,12 +260,20 @@
 	</header>
 
 	<form class="ask" onsubmit={race}>
-		<input
-			bind:value={freeText}
-			placeholder="Describe the part you need, e.g. stainless M4 screws, 500 pcs"
-			disabled={running}
-			aria-label="Part request"
-		/>
+		<div class="field">
+			<input bind:value={freeText} disabled={running} aria-label="Part request" />
+			{#if !freeText && !running}
+				<button
+					type="button"
+					class="ghost"
+					onclick={runSuggestion}
+					title="Run this example search (replays a recorded real run)"
+				>
+					<span class="ghost-q">{suggestion.question}</span>
+					<span class="ghost-k">click to search ↵</span>
+				</button>
+			{/if}
+		</div>
 		<button class="btn btn-primary" type="submit" disabled={running || !freeText.trim()}>
 			{running ? 'Racing…' : 'Race'}
 		</button>
@@ -253,12 +288,13 @@
 	{/if}
 	{#if !running && !finished}
 		<div class="split idle" aria-hidden="true">
+			<div class="mult wait"><span class="mv">?×</span><span class="ml">token gap</span></div>
 			{#each ['web', 'catalog'] as const as lane (lane)}
 				<section class="lane {lane}">
 					<h2>{lane === 'web' ? 'AI Web Search' : 'Agent Catalog'}</h2>
 					<div class="tok">
 						<div class="k">Input tokens</div>
-						<div class="tokv">0</div>
+						<div class="tokv plain">0</div>
 					</div>
 					<p class="idle-note">
 						{lane === 'web'
@@ -312,19 +348,18 @@
 				{/if}
 			</div>
 		{/if}
-		<div class="seam-anchor">
-			{#if ratio > 0}
-				<div class="seam" style:--heat={heat} aria-hidden="true">
-					<Odometer
-						value={ratioShown}
-						decimals={ratioShown < 10 ? 1 : 0}
-						suffix="×"
-						duration={700}
-					/>
-				</div>
-			{/if}
-		</div>
 		<div class="split">
+			<div class="mult" class:final={finished} style:--heat={heat} aria-hidden="true">
+				<span class="mv"
+					>{#if ratio > 0}<Odometer
+							value={ratioShown}
+							decimals={ratioShown < 10 ? 1 : 0}
+							suffix="×"
+							duration={finished ? 1400 : 600}
+						/>{:else}…{/if}</span
+				>
+				<span class="ml">{finished ? 'more tokens browsing the web' : 'web ÷ catalog tokens'}</span>
+			</div>
 			{#each ['web', 'catalog'] as const as lane (lane)}
 				{@const l = lanes[lane]}
 				<section class="lane {lane}">
@@ -335,7 +370,7 @@
 					</h2>
 					<div class="tok">
 						<div class="k">Cumulative input tokens</div>
-						<div class="tokv"><Odometer value={l.input} /></div>
+						<div class="tokv"><Odometer value={shown[lane]} duration={700} /></div>
 					</div>
 					<div class="kv">
 						<div><span class="k">Tool calls</span><span class="v">{l.calls}</span></div>
@@ -421,6 +456,12 @@
 
 <style>
 	.race {
+		/* web = red, catalog = blue (overrides the site orange / green inside the race) */
+		--web: #ff5d6c;
+		--accent: #6f93ff;
+		--accent-ink: #050b24;
+		--g-web: linear-gradient(180deg, #ffd0cb 0%, #ff7a7f 50%, #ff3b55 100%);
+		--g-cat: linear-gradient(180deg, #dbe6ff 0%, #8fabff 50%, #3d6bff 100%);
 		max-width: 1280px;
 		margin: 0 auto;
 		padding: 32px 20px 80px;
@@ -428,7 +469,7 @@
 		flex-direction: column;
 		gap: 20px;
 		background:
-			radial-gradient(90% 50% at 50% -10%, rgba(93, 240, 168, 0.07), transparent 60%), var(--bg);
+			radial-gradient(90% 50% at 50% -10%, rgba(61, 107, 255, 0.09), transparent 60%), var(--bg);
 	}
 	.head {
 		display: flex;
@@ -488,6 +529,52 @@
 		background: var(--glass-2);
 		border: 1px solid var(--brand-line);
 		box-shadow: 0 20px 50px -28px rgba(31, 75, 255, 0.8);
+	}
+	.field {
+		position: relative;
+		flex: 1;
+		min-width: 0;
+		display: flex;
+	}
+	.ghost {
+		position: absolute;
+		left: 0;
+		top: 50%;
+		transform: translateY(-50%);
+		max-width: 100%;
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		padding: 0;
+		border: 0;
+		background: none;
+		font: 16px var(--font);
+		color: var(--muted-2);
+		cursor: pointer;
+		text-align: left;
+	}
+	.ghost-q {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+		transition: color 0.15s;
+	}
+	.ghost-k {
+		flex: none;
+		font: 600 11px var(--mono);
+		color: var(--brand-2);
+		padding: 3px 8px;
+		border-radius: 999px;
+		border: 1px solid var(--line-strong);
+		opacity: 0.8;
+		transition: opacity 0.15s;
+	}
+	.ghost:hover .ghost-q {
+		color: var(--ink);
+	}
+	.ghost:hover .ghost-k {
+		opacity: 1;
 	}
 	.ask input {
 		flex: 1;
@@ -575,11 +662,99 @@
 		letter-spacing: -0.02em;
 		margin-top: 4px;
 	}
+	/* bright gradient digits; set per glyph because the reels move on transforms */
+	.tokv :global(.reel span),
+	.tokv :global(.fix) {
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	.web .tokv :global(.reel span),
+	.web .tokv :global(.fix),
+	.web .tokv.plain {
+		background-image: var(--g-web);
+	}
+	.catalog .tokv :global(.reel span),
+	.catalog .tokv :global(.fix),
+	.catalog .tokv.plain {
+		background-image: var(--g-cat);
+	}
+	.tokv.plain {
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
 	.web .tokv {
-		color: var(--web);
+		filter: drop-shadow(0 4px 20px rgba(255, 70, 90, 0.35));
 	}
 	.catalog .tokv {
-		color: var(--accent);
+		filter: drop-shadow(0 4px 20px rgba(61, 107, 255, 0.45));
+	}
+	/* catalog counter hugs the right edge so the centre is free for the multiplier */
+	.catalog .tok {
+		text-align: right;
+	}
+	.mult {
+		position: absolute;
+		left: 50%;
+		top: 116px;
+		z-index: 3;
+		transform: translate(-50%, -50%);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 6px;
+		padding: 12px 22px 10px;
+		border-radius: 22px;
+		background: rgba(4, 6, 15, 0.72);
+		border: 1px solid var(--line-strong);
+		backdrop-filter: blur(10px);
+		box-shadow: 0 0 calc(12px + var(--heat, 0) * 60px)
+			rgba(255, 93, 108, calc(0.12 + var(--heat, 0) * 0.35));
+		pointer-events: none;
+		transition:
+			box-shadow 0.6s,
+			padding 0.6s;
+	}
+	.mv {
+		/* grows with the gap; at the end it outsizes the token counters */
+		font: 800 calc(26px + var(--heat, 0) * 30px) var(--mono);
+		letter-spacing: -0.03em;
+		line-height: 1;
+		transition: font-size 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+	.mult.final .mv {
+		font-size: clamp(56px, 7.4vw, 92px);
+	}
+	.mult.final {
+		padding: 16px 28px 12px;
+		border-color: rgba(255, 93, 108, 0.5);
+	}
+	.mv :global(.reel span),
+	.mv :global(.fix) {
+		background-image: linear-gradient(90deg, #ff8a93, #ff5d6c 45%, #8fabff);
+		background-size: 200% 100%;
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	.ml {
+		font: 600 10.5px var(--mono);
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--muted);
+		white-space: nowrap;
+	}
+	.mult.final .ml {
+		color: #ffb3b9;
+	}
+	.mult.wait .mv {
+		color: var(--muted-2);
+		font-size: 26px;
+	}
+	.mult.wait {
+		box-shadow: none;
+		border-color: var(--line);
 	}
 	.kv {
 		display: grid;
@@ -664,7 +839,7 @@
 		border: 1px solid var(--line-strong);
 		border-top: 0;
 		border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-		background: linear-gradient(180deg, rgba(93, 240, 168, 0.1), rgba(93, 240, 168, 0.03));
+		background: linear-gradient(180deg, rgba(255, 93, 108, 0.1), rgba(61, 107, 255, 0.04));
 	}
 	.rl {
 		font-size: 15px;
@@ -675,7 +850,7 @@
 		color: var(--accent);
 		display: inline-block;
 		transform: scale(calc(0.85 + var(--heat, 0) * 0.45));
-		text-shadow: 0 0 calc(var(--heat, 0) * 36px) rgba(93, 240, 168, calc(var(--heat, 0) * 0.8));
+		text-shadow: 0 0 calc(var(--heat, 0) * 36px) rgba(255, 93, 108, calc(var(--heat, 0) * 0.8));
 		transition:
 			transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
 			text-shadow 0.6s;
@@ -702,8 +877,8 @@
 		display: block;
 		height: 100%;
 		border-radius: inherit;
-		background: linear-gradient(90deg, var(--brand-2), var(--accent));
-		box-shadow: 0 0 calc(var(--heat, 0) * 18px) rgba(93, 240, 168, 0.7);
+		background: linear-gradient(90deg, var(--brand-2), var(--web));
+		box-shadow: 0 0 calc(var(--heat, 0) * 18px) rgba(255, 93, 108, 0.7);
 		transition: width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
 	}
 	.meter span {
@@ -850,30 +1025,16 @@
 		color: var(--red);
 		border-color: var(--red);
 	}
-	.seam-anchor {
-		position: relative;
-		height: 0;
-		z-index: 3;
-	}
-	.seam {
-		position: absolute;
-		left: 50%;
-		top: 0;
-		transform: translate(-50%, -50%) scale(calc(0.9 + var(--heat, 0) * 0.5));
-		padding: 8px 14px;
-		border-radius: 999px;
-		font: 800 20px var(--mono);
-		color: var(--accent-ink);
-		background: var(--accent);
-		box-shadow: 0 0 calc(10px + var(--heat, 0) * 40px)
-			rgba(93, 240, 168, calc(0.3 + var(--heat, 0) * 0.5));
-		transition:
-			transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
-			box-shadow 0.6s;
-	}
 	@media (max-width: 860px) {
-		.seam {
-			display: none;
+		.mult {
+			position: static;
+			transform: none;
+			margin: 14px auto 0;
+			width: fit-content;
+			grid-column: 1 / -1;
+		}
+		.catalog .tok {
+			text-align: left;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

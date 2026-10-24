@@ -9,6 +9,7 @@
 	import SiteFooter from '#lib/demo/SiteFooter.svelte';
 	import SearchDock from '#lib/demo/SearchDock.svelte';
 	import IntroCarousel from '#lib/demo/IntroCarousel.svelte';
+	import FlowCompare from '#lib/demo/FlowCompare.svelte';
 
 	// Login popup; /account sends signed-out visitors here with ?login=1.
 	let loginOpen = $state(page.url.searchParams.get('login') === '1');
@@ -138,12 +139,26 @@
 				</div>
 			</nav>
 			<div class="hero-main">
-				<div class="pill"><span class="dot"></span>Domain search for AI agents</div>
+				<div class="pill"><span class="dot"></span>Domain-specific search engine for AI agents</div>
 				<h1 class="hero-title">The Search Engine<br />Built for Agents</h1>
 				<p class="hero-sub">
-					A domain-specific search engine for AI agents. Find the right part fast, and spend a
-					fraction of the tokens.
+					Not a web search with a chatbot on top. A purpose-built index of real, buyable parts that
+					agents query directly.
 				</p>
+				<div class="keys">
+					<div class="key">
+						<span class="key-ic">{@render icon('bolt')}</span>
+						<span class="key-t"
+							><b>Faster</b>One structured lookup instead of browsing page after page</span
+						>
+					</div>
+					<div class="key">
+						<span class="key-ic">{@render icon('analytics')}</span>
+						<span class="key-t"
+							><b>Fewer tokens</b>Clean rows, not raw HTML, so the agent reads a fraction</span
+						>
+					</div>
+				</div>
 				<div class="hero-actions">
 					<a class="roll-host cta-primary" href="#race">{@render roll('Try a live search')}</a>
 					<a class="roll-host cta-secondary" href="#monitor"
@@ -171,6 +186,13 @@
 			<h2>Web search is built for people. This is built for agents.</h2>
 		</div>
 		<IntroCarousel />
+	</section>
+
+	<section class="features flow-sec" id="how">
+		<div class="section-head compact">
+			<h2>Agents shouldn't browse. They should look it up.</h2>
+		</div>
+		<FlowCompare />
 	</section>
 
 	<section class="demo-section" id="race">
@@ -215,6 +237,9 @@
 		position: relative;
 		z-index: 1;
 		padding: clamp(48px, 7vw, 88px) 0 clamp(40px, 6vw, 72px);
+	}
+	.flow-sec {
+		padding-top: 0;
 	}
 	.section-head.compact {
 		margin-bottom: 24px;
@@ -363,7 +388,8 @@
 		width: 100%;
 		max-width: 1024px;
 		margin: 0 auto;
-		padding: 0 16px 64px 17px;
+		/* sits fully below the nav: no upward shift, a little air under the header */
+		padding: clamp(28px, 5vh, 56px) 16px 64px 17px;
 	}
 	.pill {
 		display: inline-flex;
@@ -400,6 +426,59 @@
 		color: #d1d5db;
 		max-width: 672px;
 		margin-bottom: 32px;
+	}
+	/* the two selling points, read as keywords */
+	.keys {
+		display: flex;
+		gap: 14px;
+		justify-content: center;
+		flex-wrap: wrap;
+		margin: -8px 0 32px;
+	}
+	.key {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 12px 18px 12px 12px;
+		border-radius: 14px;
+		border: 1px solid rgba(255, 255, 255, 0.16);
+		background: rgba(8, 12, 28, 0.55);
+		backdrop-filter: blur(12px);
+		text-align: left;
+		max-width: 320px;
+	}
+	.key-ic {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border-radius: 10px;
+		background: rgba(61, 107, 255, 0.18);
+		color: #8fabff;
+	}
+	.key-ic :global(svg) {
+		width: 20px;
+		height: 20px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.8;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.key-t {
+		display: flex;
+		flex-direction: column;
+		font-size: 13px;
+		line-height: 1.4;
+		color: #c3cad9;
+	}
+	.key-t b {
+		font-size: 19px;
+		font-weight: 600;
+		color: #fff;
+		letter-spacing: -0.01em;
+		margin-bottom: 2px;
 	}
 	.hero-actions {
 		display: flex;
@@ -444,25 +523,35 @@
 		justify-content: center;
 		gap: clamp(16px, 4vw, 40px);
 		flex-wrap: wrap;
-		margin-top: 48px;
+		margin-top: clamp(64px, 9vh, 104px);
 	}
 	.counter {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 4px;
-		padding: 14px 26px;
-		border-radius: var(--radius);
+		gap: 8px;
+		padding: 20px 36px 18px;
+		border-radius: var(--radius-lg);
 		background: var(--glass);
 		border: 1px solid var(--line);
 		backdrop-filter: blur(14px);
 	}
 	.cv {
-		font: 700 clamp(26px, 3.4vw, 38px) var(--mono);
-		color: var(--accent);
+		font: 700 clamp(38px, 5vw, 60px) var(--mono);
+		letter-spacing: -0.02em;
+		filter: drop-shadow(0 4px 22px rgba(31, 75, 255, 0.45));
+	}
+	/* brand-blue gradient per glyph: the digits roll on transforms, so a gradient clipped on the
+	   parent would not follow them */
+	.cv :global(.reel span),
+	.cv :global(.fix) {
+		background: linear-gradient(180deg, #c7d6ff 0%, #6f93ff 45%, var(--brand) 100%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
 	}
 	.cl {
-		font-size: 13px;
+		font-size: 14px;
 		color: var(--muted);
 	}
 
@@ -488,12 +577,6 @@
 		width: auto;
 	}
 
-	/* sit above the visual centre so the copy clears the bright ring */
-	@media (min-width: 721px) {
-		.hero-main {
-			transform: translateY(-9vh);
-		}
-	}
 	@media (max-width: 720px) {
 		.nav-links {
 			display: none;

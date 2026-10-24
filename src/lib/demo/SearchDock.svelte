@@ -170,13 +170,15 @@
 		}
 	}
 
+	// nothing to show yet: the form and sample questions spread out to fill the panel
+	const idle = $derived(!running && !spec && !errorMsg && !handedOff);
 	const usd = (v: number) => '$' + v.toFixed(v < 0.1 ? 4 : 2);
 	const LABEL: Record<Lane, string> = { web: 'Web AI search', catalog: 'Agent Catalog' };
 </script>
 
 <div class="dock" class:open>
 	{#if open}
-		<section class="panel" aria-label="Agent search">
+		<section class="panel" class:idle aria-label="Agent search">
 			<header class="ph">
 				<div>
 					<b><img src="/brand/icon-blue.png" alt="" width="18" height="20" />Ask an agent</b>
@@ -232,6 +234,20 @@
 			</form>
 
 			<div class="body">
+				{#if idle}
+					<div class="samples">
+						<div class="sh">Try a question</div>
+						{#each PRESETS as p (p.id)}
+							<button type="button" class="sample" onclick={() => (query = p.question)}
+								>{p.question}</button
+							>
+						{/each}
+						<p class="muted">
+							Pick one to fill the box, then 예시 검색 replays a recorded run for free or 실제 검색
+							runs it live.
+						</p>
+					</div>
+				{/if}
 				{#if handedOff && demo.raceMounted}
 					<p class="handoff">
 						{demo.raceRunning
@@ -412,7 +428,7 @@
 	}
 	.panel {
 		width: min(380px, calc(100vw - 40px));
-		height: min(86vh, 760px);
+		height: min(80vh, 680px);
 		display: flex;
 		flex-direction: column;
 		border-radius: 20px;
@@ -549,6 +565,41 @@
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
+	}
+	/* idle: a taller input and sample questions spread over the panel instead of hugging the top */
+	.panel.idle .forms {
+		padding: 14px 14px 12px;
+		gap: 10px;
+	}
+	.panel.idle .forms textarea {
+		min-height: 128px;
+	}
+	.panel.idle .body {
+		padding: 14px;
+	}
+	.samples {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		justify-content: space-evenly;
+		gap: 8px;
+	}
+	.sample {
+		text-align: left;
+		font: 13px/1.45 var(--font);
+		color: var(--d-ink);
+		background: var(--d-soft);
+		border: 1px solid transparent;
+		border-radius: 12px;
+		padding: 11px 13px;
+		cursor: pointer;
+		transition:
+			border-color 0.15s,
+			background 0.15s;
+	}
+	.sample:hover {
+		background: #eef2ff;
+		border-color: rgba(31, 75, 255, 0.35);
 	}
 	.err {
 		color: #dc2626;
