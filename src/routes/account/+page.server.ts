@@ -3,7 +3,8 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
 import { apiKeys, apiRequests } from '#lib/server/db/schema.ts';
 import { issueApiKey } from '#lib/server/api.ts';
-import { listWallets, readCalls, removeWallet } from '#lib/server/local-store.ts';
+import { readCalls } from '#lib/server/local-store.ts';
+import { listWallets, removeWallet } from '#lib/server/wallets.ts';
 import type { CallLogEntry } from '#lib/server/calls.ts';
 import type { Actions, PageServerLoad } from './$types';
 

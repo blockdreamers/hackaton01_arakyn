@@ -3,7 +3,7 @@
 // fixed rates the search ranks by. No LLM, no writes.
 import { sql, type SQL } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
-import { krwRateSql, searchOffers, toKrw } from '#lib/server/agent/db-search.ts';
+import { krwRateSql, like, searchOffers, toKrw } from '#lib/server/agent/db-search.ts';
 
 const TOP_CATEGORIES = 12;
 const ROWS_PER_CATEGORY = 8;
@@ -227,7 +227,7 @@ export async function monitorSearch(q: string, override?: string[]) {
 	const hit = (s: string) => terms.find((t) => s.toLowerCase().includes(t));
 	const anyTerm: SQL = terms.length
 		? sql.join(
-				terms.map((t) => sql`p.name ilike ${'%' + t + '%'}`),
+				terms.map((t) => sql`p.name ilike ${like(t)}`),
 				sql` or `
 			)
 		: sql`false`;

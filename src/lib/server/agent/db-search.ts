@@ -52,7 +52,8 @@ export const toKrw = (price: number | null, currency: string) =>
 	price == null ? null : Math.round(price * (KRW_PER[currency] ?? 1));
 const priceKrwSql = sql`(${products.price} * ${krwRateSql('"sites"."currency"')})`;
 
-const like = (t: string) => `%${t.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
+/** `%term%` for ILIKE, with %, _ and \ in the term matched literally */
+export const like = (t: string) => `%${t.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
 
 export async function searchOffers(input: SearchInput) {
 	const terms = input.terms

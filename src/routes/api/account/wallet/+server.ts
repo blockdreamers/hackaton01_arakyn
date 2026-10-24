@@ -1,7 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
 import { verifyMessage } from 'viem';
-import { saveWallet } from '#lib/server/local-store.ts';
+import { saveWallet } from '#lib/server/wallets.ts';
 import type { RequestHandler } from './$types';
 
 const NONCE_COOKIE = 'wallet_nonce';
