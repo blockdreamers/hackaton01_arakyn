@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build locally and deploy to codev-app (mlc.techtree.kr)
+# Build locally and deploy to codev-app (agent-catalog.techtree.kr)
 set -euo pipefail
 cd "$(dirname "$0")"
 
