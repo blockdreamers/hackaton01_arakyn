@@ -4,13 +4,15 @@ import { products, scrapeRuns, sites } from '../db/schema.ts';
 import { iaansci } from './sources/iaansci.ts';
 import { navimro } from './sources/navimro.ts';
 import { daiso, daisoJp } from './sources/daiso-mcp.ts';
+import { officedepot } from './sources/officedepot.ts';
 import type { Fetcher, ScrapedProduct, ScrapeOptions, SiteScraper } from './types.ts';
 
 export const scrapers: Record<string, SiteScraper> = {
 	[iaansci.code]: iaansci,
 	[navimro.code]: navimro,
 	[daiso.code]: daiso,
-	[daisoJp.code]: daisoJp
+	[daisoJp.code]: daisoJp,
+	[officedepot.code]: officedepot
 };
 
 const USER_AGENT = 'AgentCatalogBot/0.1 (+https://agent-catalog.techtree.kr)';

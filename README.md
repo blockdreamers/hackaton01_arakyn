@@ -43,12 +43,13 @@ Collects product name, price, image URL, link, brand and categories from shop li
 `products`. Each shop is a row in `sites` with its country (ISO 3166-1, e.g. `KR`) and currency
 (ISO 4217, e.g. `KRW`); prices are stored in the site's currency.
 
-| site                             | listing                                   | size (Oct 2026)                            | delay |
-| -------------------------------- | ----------------------------------------- | ------------------------------------------ | ----- |
-| `iaansci` (이안과학, Cafe24)     | `/product/list.html?cate_no=N&page=P`     | ~24k products, ~700 pages, ~12 min         | 1 s   |
-| `navimro` (나비엠알오)           | `/s/c-NN/page-P/?hits=90`                 | ~2.07M products, ~23k pages (~2 MB each)   | 2 s   |
-| `daiso` (다이소, KR)             | daiso-mcp `GET /api/daiso/products?q=`    | keyword search, 100/page, ≤3 pages/keyword | 2 s   |
-| `daiso_jp` (DAISO Japan, JP/JPY) | daiso-mcp `GET /api/daiso-jp/products?q=` | keyword search, 24/page, ≤3 pages/keyword  | 2 s   |
+| site                             | listing                                                     | size (Oct 2026)                            | delay |
+| -------------------------------- | ----------------------------------------------------------- | ------------------------------------------ | ----- |
+| `iaansci` (이안과학, Cafe24)     | `/product/list.html?cate_no=N&page=P`                       | ~24k products, ~700 pages, ~12 min         | 1 s   |
+| `navimro` (나비엠알오)           | `/s/c-NN/page-P/?hits=90`                                   | ~2.07M products, ~23k pages (~2 MB each)   | 2 s   |
+| `officedepot` (오피스디포)       | `/cate/cateItemList.do?cateId=N&rowLevel=1&currentPageNo=P` | ~31k products, ~530 pages                  | 1.5 s |
+| `daiso` (다이소, KR)             | daiso-mcp `GET /api/daiso/products?q=`                      | keyword search, 100/page, ≤3 pages/keyword | 2 s   |
+| `daiso_jp` (DAISO Japan, JP/JPY) | daiso-mcp `GET /api/daiso-jp/products?q=`                   | keyword search, 24/page, ≤3 pages/keyword  | 2 s   |
 
 Daiso goes through the public [daiso-mcp](https://github.com/hmmhmmhm/daiso-mcp) API
 (`https://mcp.aka.page`), a shared free service, so it runs slowly and only a few pages per keyword.
