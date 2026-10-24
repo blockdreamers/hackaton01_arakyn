@@ -1,9 +1,12 @@
 <script lang="ts">
 	import ProductMarquee from '#lib/demo/ProductMarquee.svelte';
+	import RollingNumber from '#lib/demo/RollingNumber.svelte';
 	// Data monitor: the real connected DB as a terminal tree, and a traced keyword search replayed
 	// over it (cursor walks categories, then rows), next to a single pipeline of what happened.
 	// Read-only and LLM-free, so running it costs nothing.
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
+	import { demo } from '#lib/demo/demo-state.svelte.ts';
+	import { slide } from 'svelte/transition';
 	import { countSearch } from '#lib/demo/stats.ts';
 	import type { MonitorTree, MonitorSearchResult, Product, TraceRow } from '#lib/server/monitor.ts';
 
@@ -37,6 +40,13 @@
 	let cursor = $state<string | null>(null);
 	let steps = $state<Record<StepKey, { s: StepState; v: string }>>(freshSteps());
 	let log = $state<string[]>([]);
+	// live detail feed: one card per step in the order they ran; only the current one is open
+	let feed = $state<StepKey[]>([]);
+	let expanded = $state<StepKey[]>([]);
+	let live = $state<MonitorSearchResult | null>(null);
+	let kept = $state(0);
+	let dropped = $state(0);
+	let feedEl = $state<HTMLDivElement>();
 	let evaluated = $state(0);
 	let replayMs = $state(0);
 	let token = 0;
@@ -69,6 +79,23 @@
 			? Math.round((1 - p.price / p.listPrice) * 100)
 			: 0;
 	const day = (iso: string) => iso.slice(0, 10);
+	const hhmm = (iso: string) => new Date(iso).toTimeString().slice(0, 5);
+	const flag = (cc: string) =>
+		cc.length === 2
+			? String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0)))
+			: '';
+	const minutesSince = (iso: string | null) =>
+		iso ? Math.max(1, (Date.now() - new Date(iso).getTime()) / 60000) : 0;
+	const elapsed = (iso: string | null) => {
+		const m = Math.round(minutesSince(iso));
+		return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`;
+	};
+	const rate = $derived(
+		tree?.collection.since
+			? Math.round(tree.totals.products / minutesSince(tree.collection.since))
+			: 0
+	);
+	const maxBucket = $derived(Math.max(1, ...(tree?.collection.buckets.map((b) => b.n) ?? [1])));
 	const ago = (iso: string | null) => {
 		if (!iso) return 'never';
 		const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -94,6 +121,14 @@
 
 	const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+	async function begin(k: StepKey, v = '') {
+		steps[k] = { s: 'on', v };
+		if (!feed.includes(k)) feed = [...feed, k];
+		expanded = [k];
+		await tick();
+		feedEl?.scrollTo({ top: feedEl.scrollHeight, behavior: reduced() ? 'auto' : 'smooth' });
+	}
 
 	function note(line: string) {
 		log = [...log, `${new Date().toLocaleTimeString('en-GB')}  ${line}`];
@@ -125,10 +160,15 @@
 		shownRows = {};
 		steps = freshSteps();
 		log = [];
+		feed = [];
+		expanded = [];
+		live = null;
+		kept = 0;
+		dropped = 0;
 		evaluated = 0;
 		countSearch();
 
-		steps.request = { s: 'on', v: `“${text}”` };
+		await begin('request', `“${text}”`);
 		note(`request  search_offers("${text}")`);
 		const t0 = performance.now();
 		const r = await fetch('/api/monitor/search', {
@@ -143,18 +183,21 @@
 			return;
 		}
 		const data: MonitorSearchResult = await r.json();
+		live = data;
 		const animate = !reduced();
 		const wait = (ms: number) => (animate ? sleep(ms) : Promise.resolve());
 		steps.request = { s: 'done', v: `“${text}”` };
+		await wait(500);
+		await begin('parse');
 		steps.parse = {
 			s: data.terms.length ? 'done' : 'bad',
 			v: data.terms.length ? data.terms.join(' · ') : 'no search terms'
 		};
 		note(`parse    terms = [${data.terms.join(', ')}]`);
-		await wait(350);
+		await wait(700);
 
 		// stage 1: which shops have matches
-		steps.index = { s: 'on', v: 'scanning sites…' };
+		await begin('index', 'scanning sites…');
 		for (const st of data.sites) {
 			if (my !== token) return;
 			await follow(`site:${st.code}`);
@@ -188,7 +231,7 @@
 		note(`index    ${hitCats}/${data.categories.length} categories contain a term`);
 
 		// stage 3: open the busiest matching categories and walk their rows
-		steps.filter = { s: 'on', v: 'checking rows…' };
+		await begin('filter', 'checking rows…');
 		const byCat: Record<string, TraceRow[]> = {};
 		for (const row of data.rows) (byCat[row.category] ??= []).push(row);
 		for (const [cat, rows] of Object.entries(byCat)) {
@@ -202,6 +245,8 @@
 				await follow(`row:${row.id}`);
 				await wait(110);
 				rowStatus[row.id] = row.result;
+				if (row.result === 'match') kept++;
+				else dropped++;
 				evaluated++;
 			}
 		}
@@ -211,6 +256,7 @@
 
 		res = data;
 		replayMs = performance.now() - t0;
+		await begin('deliver');
 		steps.deliver = {
 			s: data.top.length ? 'done' : 'bad',
 			v: data.top.length
@@ -218,14 +264,16 @@
 				: 'nothing to deliver'
 		};
 		note(`deliver  ${data.top.length} rows, hash ${data.dataHash}`);
-		await wait(300);
+		await wait(900);
+		await begin('verify');
 		const passed = data.verify.checks.filter((c) => c.listed && c.termInName).length;
 		steps.verify = {
 			s: data.verify.pass ? 'done' : 'bad',
 			v: `${passed}/${data.verify.checks.length} rows pass · code rules, 0 tokens`
 		};
 		note(`verify   ${data.verify.pass ? 'pass' : 'fail'} (${passed}/${data.verify.checks.length})`);
-		await wait(300);
+		await wait(900);
+		await begin('pay');
 		steps.pay = data.verify.pass
 			? { s: 'done', v: '0.02 USDC · x402 (simulated here)' }
 			: { s: 'bad', v: 'refused · 0 USDC' };
@@ -234,14 +282,60 @@
 				? 'pay      0.02 USDC settled (simulated)'
 				: 'pay      refused, agent re-searches'
 		);
+		// leave the delivered rows and the payment open at the end
+		if (data.top.length) expanded = ['deliver', 'pay'];
 		cursor = null;
 		running = false;
+		await tick();
+		feedEl?.scrollTo({ top: feedEl.scrollHeight, behavior: reduced() ? 'auto' : 'smooth' });
 	}
+
+	// One search plays everywhere: asking here hands the query to the token race, which runs it
+	// and broadcasts demo.lastQuery back; that is what starts the scan replay below.
+	let relayed = $state(false);
+	let lastSeenId = 0;
+
+	function ask(text: string) {
+		if (!text.trim()) return;
+		q = text;
+		if (demo.raceMounted) {
+			relayed = true;
+			demo.raceRequest = {
+				id: Date.now(),
+				label: text,
+				body: { mode: 'ai', query: text, lanes: ['catalog', 'web'] }
+			};
+		} else {
+			relayed = false;
+			run(text);
+		}
+	}
+
+	$effect(() => {
+		const lq = demo.lastQuery;
+		if (!lq || lq.id === lastSeenId) return;
+		lastSeenId = lq.id;
+		untrack(() => {
+			q = lq.label;
+			// a newer shared search replaces whatever replay is on screen
+			token++;
+			running = false;
+			run(lq.label);
+		});
+	});
 
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
-		run();
+		ask(q);
 	}
+
+	const doneCount = $derived(STEPS.filter((x) => steps[x.key].s === 'done').length);
+	const failed = $derived(STEPS.some((x) => steps[x.key].s === 'bad'));
+	const current = $derived(STEPS.findIndex((x) => steps[x.key].s === 'on'));
+	const progress = $derived(
+		current >= 0 ? (current + 0.5) / STEPS.length : doneCount / STEPS.length
+	);
+	const ok = (b: boolean) => (b ? '✓' : '✕');
 
 	const rank = (id: number) => (res ? res.top.slice(0, 3).findIndex((r) => r.id === id) + 1 : 0);
 	const sitesTotal = $derived(tree ? tree.sites.length : 0);
@@ -300,11 +394,27 @@
 	{#if tree}
 		<div class="overview">
 			<div class="ov sites-ov">
-				<div class="ovh">Products by site</div>
+				<div class="ovh">Collected by our team</div>
+				<div class="big"><b><RollingNumber value={tree.totals.products} /></b> products</div>
+				<p class="big-s">
+					Real listings our team collected from {sitesTotal} shops in
+					<b>{elapsed(tree.collection.since)}</b>
+					{#if rate}<span class="rate">{fmt(rate)} products / min</span>{/if}
+				</p>
+				<div class="spark" aria-hidden="true">
+					{#each tree.collection.buckets as b (b.t)}
+						<i style:height="{Math.max(4, (b.n / maxBucket) * 100)}%" title={fmt(b.n)}></i>
+					{/each}
+				</div>
+				<div class="spark-l">
+					<span>{tree.collection.since ? hhmm(tree.collection.since) : ''}</span><span>now</span>
+				</div>
+				<div class="ovh sub">By site</div>
 				{#each tree.sites as st (st.code)}
 					<div class="bar-row">
 						<span class="bar-l"
-							><b>{st.code}</b> <span class="cur">{st.country} · {st.currency}</span></span
+							><span class="flag">{flag(st.country)}</span><b>{st.code}</b>
+							<span class="cur">{st.currency}</span></span
 						>
 						<span class="bar"
 							><i style:width="{Math.max(1.5, (st.count / tree.sites[0].count) * 100)}%"></i></span
@@ -326,23 +436,30 @@
 		</div>
 	{/if}
 
-	<form class="ask" onsubmit={submit}>
-		<input
-			bind:value={q}
-			placeholder="Search the index, e.g. LED, 캐스터, socket screw"
-			aria-label="Search the index"
-			disabled={running}
-		/>
-		<button class="btn btn-primary" disabled={running || !q.trim() || !tree}
-			>{running ? 'Running…' : 'Run'}</button
-		>
-	</form>
-	<p class="hint">
-		Try
-		{#each HINTS as h, i (h)}<button type="button" onclick={() => run(h)} disabled={running}
-				>{h}</button
-			>{i < HINTS.length - 1 ? ' · ' : ''}{/each}
-	</p>
+	<section class="console">
+		<div class="console-h">
+			<span class="eyebrow">Run a search</span>
+			<p>Type what an agent would ask. The engine walks the live index below, step by step.</p>
+		</div>
+		<form class="ask" onsubmit={submit}>
+			<input
+				bind:value={q}
+				placeholder="Search the index, e.g. LED, 캐스터, socket screw"
+				aria-label="Search the index"
+				disabled={running}
+			/>
+			<button class="btn btn-primary" disabled={running || !q.trim() || !tree}
+				>{running ? 'Running…' : 'Run'}</button
+			>
+		</form>
+		<p class="hint">
+			Try
+			{#each HINTS as h, i (h)}<button type="button" onclick={() => ask(h)} disabled={running}
+					>{h}</button
+				>{i < HINTS.length - 1 ? ' · ' : ''}{/each}
+			{#if relayed}<span class="relay">· also running in the token race above</span>{/if}
+		</p>
+	</section>
 
 	<div class="grid">
 		<div class="term">
@@ -434,52 +551,143 @@
 		</div>
 
 		<div class="side">
-			<ol class="pipe">
-				{#each STEPS as st, i (st.key)}
-					{@const s = steps[st.key]}
-					<li class={s.s}>
-						<span class="dot">{s.s === 'done' ? '✓' : s.s === 'bad' ? '✕' : i + 1}</span>
-						<div>
-							<b>{st.label}</b>
-							<span class="v">{s.v || '—'}</span>
-						</div>
-					</li>
-				{/each}
-			</ol>
-
-			<div class="results">
-				<div class="rh">
-					<span>Delivered to the agent</span>
-					{#if res}<span class="tag {res.verify.pass ? 'ok' : 'bad'}"
-							>{res.verify.pass ? 'verified · paid' : 'not verified · not paid'}</span
-						>{/if}
-				</div>
-				{#if res?.top.length}
-					{#each res.top.slice(0, 5) as r, i (r.id)}
-						<a class="card" href={r.url} target="_blank" rel="noreferrer">
-							<span class="n">#{i + 1}</span>
-							<span class="name">{r.name}</span>
-							<span class="price"
-								>{money(r.price, r.currency)}{#if r.currency !== 'KRW' && r.price_krw != null}
-									<small>≈₩{fmt(r.price_krw)}</small>{/if}</span
-							>
-							<span class="meta"><span class="sb">{r.site}</span> seen {r.seen}</span>
-						</a>
+			<div class="ptree" class:failed>
+				<div class="ptrack"><i style:height="{progress * 100}%"></i></div>
+				<ol>
+					{#each STEPS as st, i (st.key)}
+						{@const s = steps[st.key]}
+						<li class={s.s} class:now={i === current}>
+							<span class="pdot">{s.s === 'done' ? '✓' : s.s === 'bad' ? '✕' : ''}</span>
+							<span class="pl">{st.label}</span>
+							{#if s.s !== 'idle'}<span class="pv">{s.v}</span>{/if}
+						</li>
 					{/each}
-					<p class="fx">Ranked in KRW at fixed rates: $1 = ₩1,380 · ¥1 = ₩9.2 · £1 = ₩1,750</p>
-				{:else if res}
-					<p class="empty">No product in the index matches “{res.query}”.</p>
-				{:else}
-					<p class="empty">Results appear here after a search.</p>
-				{/if}
+				</ol>
+				<div class="pfoot">
+					{#if running}
+						Step {Math.max(current, 0) + 1} of {STEPS.length}
+					{:else if res}
+						{res.verify.pass ? 'Done · verified and paid' : 'Done · payment refused'}
+					{:else}
+						Waiting for a search
+					{/if}
+				</div>
 			</div>
 
-			{#if log.length}
-				<details class="log">
-					<summary>Event log ({log.length})</summary>
-					<pre>{log.join('\n')}</pre>
-				</details>
-			{/if}
+			<div class="feed" bind:this={feedEl}>
+				{#if !feed.length}
+					<p class="empty">
+						Each step's details stream in here as the search runs: the request payload, parsed
+						terms, sites and categories hit, filters, delivered rows, verification and payment.
+					</p>
+				{/if}
+				{#each feed as k (k)}
+					{@const st = STEPS.find((x) => x.key === k)!}
+					{@const s = steps[k]}
+					{@const isOpen = expanded.includes(k)}
+					<section class="fcard {s.s}" class:open={isOpen}>
+						<button
+							type="button"
+							class="fhead"
+							onclick={() =>
+								(expanded = isOpen ? expanded.filter((x) => x !== k) : [...expanded, k])}
+						>
+							<span class="fdot">{s.s === 'done' ? '✓' : s.s === 'bad' ? '✕' : '•'}</span>
+							<b>{st.label}</b>
+							<span class="fsum">{s.v}</span>
+						</button>
+						{#if isOpen}
+							<div class="fbody" transition:slide={{ duration: 260 }}>
+								{#if k === 'request'}
+									<pre class="code">{JSON.stringify(
+											{
+												tool: 'search_offers',
+												q,
+												client: 'demo-agent',
+												ts: new Date().toISOString()
+											},
+											null,
+											2
+										)}</pre>
+								{:else if k === 'parse' && live}
+									<div class="chips-s">
+										{#each live.terms as t (t)}<span class="tchip">{t}</span>{/each}
+									</div>
+									<p class="fnote">Keyword split, no LLM call: 0 tokens.</p>
+								{:else if k === 'index' && live}
+									<div class="kv-h">Sites</div>
+									{#each live.sites as x (x.code)}
+										<div class="kv" class:dim={siteStatus[x.code] === 'skip'}>
+											<span>{x.code}</span>
+											<span class="mono"
+												>{siteStatus[x.code] ? fmt(siteMatches[x.code] ?? 0) : '…'}</span
+											>
+										</div>
+									{/each}
+									<div class="kv-h">Categories</div>
+									{#each live.categories
+										.filter((c) => catStatus[c.name] === 'match')
+										.slice(0, 6) as c (c.name)}
+										<div class="kv">
+											<span>{c.name}</span><span class="mono">{fmt(c.matches)}</span>
+										</div>
+									{/each}
+								{:else if k === 'filter' && live}
+									<ul class="rules">
+										<li><code>active = true</code></li>
+										<li>
+											<code>name ILIKE any(</code>{live.terms.join(', ')}<code>)</code>
+										</li>
+										<li><code>ORDER BY price × fx → KRW</code></li>
+									</ul>
+									<div class="kd">
+										<span class="k">kept <b>{kept}</b></span>
+										<span class="d">dropped <b>{dropped}</b></span>
+										<span>total matches <b>{fmt(live.total)}</b></span>
+									</div>
+								{:else if k === 'deliver' && live}
+									{#each live.top.slice(0, 3) as r, i (r.id)}
+										<a class="drow" href={r.url} target="_blank" rel="noreferrer">
+											<span class="n">#{i + 1}</span>
+											<span class="name">{r.name}</span>
+											<span class="price"
+												>{money(
+													r.price,
+													r.currency
+												)}{#if r.currency !== 'KRW' && r.price_krw != null}
+													<small>≈₩{fmt(r.price_krw)}</small>{/if}</span
+											>
+											<span class="meta"><span class="sb">{r.site}</span> seen {r.seen}</span>
+										</a>
+									{/each}
+									<p class="fnote mono">data_hash {live.dataHash}</p>
+								{:else if k === 'verify' && live}
+									{#each live.verify.checks as c, i (c.id)}
+										<div class="vrow">
+											<span class="n">#{i + 1}</span>
+											<span class={c.listed ? 'okc' : 'bad'}>{ok(c.listed)} price listed</span>
+											<span class={c.termInName ? 'okc' : 'bad'}
+												>{ok(c.termInName)} term in name</span
+											>
+										</div>
+									{/each}
+									<p class="fnote">Code rules, same input → same answer, 0 tokens.</p>
+								{:else if k === 'pay' && live}
+									{#if live.verify.pass}
+										<div class="payline">
+											<b>0.02 USDC</b> → Agent Catalog · x402 on Base Sepolia
+										</div>
+										<p class="fnote">Simulated here; the search dock settles real testnet USDC.</p>
+									{:else}
+										<div class="payline bad">Payment refused · 0 USDC</div>
+										<p class="fnote">The agent re-searches with new conditions and pays nothing.</p>
+									{/if}
+								{/if}
+							</div>
+						{/if}
+					</section>
+				{/each}
+			</div>
 		</div>
 	</div>
 </div>
@@ -726,34 +934,10 @@
 		border: 1px solid var(--line-strong);
 		background: #050912;
 	}
-	.pipe li.on .dot {
-		color: #fff;
-		border-color: var(--brand-2);
-		box-shadow: 0 0 0 4px rgba(61, 107, 255, 0.18);
-	}
-	.pipe li.done .dot {
-		color: #fff;
-		background: var(--brand);
-		border-color: var(--brand);
-	}
-	.pipe li.bad .dot {
-		color: #fff;
-		background: var(--red);
-		border-color: var(--red);
-	}
 	.pipe b {
 		display: block;
 		font-size: 14px;
 		font-weight: 600;
-	}
-	.pipe .v {
-		display: block;
-		font: 12px var(--mono);
-		color: var(--muted);
-		overflow-wrap: anywhere;
-	}
-	.pipe li.idle b {
-		color: var(--muted);
 	}
 	.results {
 		border: 1px solid var(--line-strong);
@@ -834,9 +1018,6 @@
 		padding: 10px 14px;
 		font-size: 13px;
 		color: var(--muted);
-	}
-	.log summary {
-		cursor: pointer;
 	}
 	.log pre {
 		margin-top: 8px;
@@ -1030,6 +1211,412 @@
 		.prow .sb,
 		.prow .cv {
 			display: none;
+		}
+	}
+	/* search console: its own block, set apart from the overview */
+	.console {
+		margin-top: 22px;
+		padding-top: 26px;
+		border-top: 1px solid var(--line);
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.relay {
+		margin-left: 6px;
+		color: var(--accent);
+	}
+	.console-h p {
+		margin-top: 6px;
+		color: var(--muted);
+		font-size: 14.5px;
+	}
+	/* overview headline */
+	.sites-ov {
+		display: flex;
+		flex-direction: column;
+	}
+	.big {
+		font-size: 15px;
+		color: var(--muted);
+	}
+	.big b {
+		font: 800 clamp(30px, 3.6vw, 40px) var(--font);
+		color: var(--ink);
+		margin-right: 6px;
+	}
+	.big-s b {
+		color: var(--ink);
+	}
+	.big-s .rate {
+		display: inline-block;
+		margin-left: 6px;
+		font: 11.5px var(--mono);
+		color: var(--accent);
+		padding: 1px 8px;
+		border-radius: 999px;
+		background: rgba(93, 240, 168, 0.1);
+	}
+	.big-s {
+		margin: 4px 0 12px;
+		font-size: 13px;
+		color: var(--muted);
+	}
+	.spark {
+		display: flex;
+		align-items: flex-end;
+		gap: 4px;
+		height: 54px;
+		padding: 4px 0;
+		border-bottom: 1px solid var(--line);
+	}
+	.spark i {
+		flex: 1;
+		border-radius: 3px 3px 0 0;
+		background: linear-gradient(180deg, var(--brand-2), rgba(31, 75, 255, 0.35));
+	}
+	.spark-l {
+		display: flex;
+		justify-content: space-between;
+		font: 10.5px var(--mono);
+		color: var(--muted-2);
+		margin: 4px 0 12px;
+	}
+	.ovh.sub {
+		margin: 4px 0 6px;
+	}
+	.flag {
+		margin-right: 6px;
+	}
+	/* darker terminal */
+	.term {
+		background: #010205;
+		border-color: rgba(61, 107, 255, 0.28);
+		box-shadow:
+			inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+			0 24px 60px -30px rgba(0, 0, 0, 0.9);
+	}
+	.term-head {
+		background: #05070d;
+	}
+	.term-head > span:first-child::before {
+		content: '● ● ●';
+		letter-spacing: 2px;
+		margin-right: 10px;
+		color: #2a3142;
+	}
+	.term-foot {
+		background: #05070d;
+	}
+	/* compact progress tree */
+	.side {
+		position: sticky;
+		top: 12px;
+	}
+	.ptree {
+		position: relative;
+		border: 1px solid var(--line-strong);
+		border-radius: var(--radius);
+		background: var(--glass);
+		padding: 14px 16px 10px 16px;
+	}
+	.ptree ol {
+		list-style: none;
+		position: relative;
+	}
+	.ptrack {
+		position: absolute;
+		left: 26px;
+		top: 24px;
+		bottom: 44px;
+		width: 2px;
+		background: var(--line-strong);
+		border-radius: 2px;
+	}
+	.ptrack i {
+		display: block;
+		width: 100%;
+		border-radius: 2px;
+		background: linear-gradient(180deg, var(--brand), var(--accent));
+		transition: height 0.5s ease;
+	}
+	.failed .ptrack i {
+		background: linear-gradient(180deg, var(--brand), var(--red));
+	}
+	.ptree li {
+		display: grid;
+		grid-template-columns: 22px auto minmax(0, 1fr);
+		align-items: center;
+		gap: 10px;
+		padding: 4px 0;
+		font-size: 13.5px;
+		color: var(--muted-2);
+		position: relative;
+	}
+	.pdot {
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		font: 700 11px var(--mono);
+		background: #050912;
+		border: 2px solid var(--line-strong);
+		position: relative;
+		z-index: 1;
+	}
+	.ptree li.done {
+		color: var(--ink);
+	}
+	.ptree li.done .pdot {
+		background: var(--brand);
+		border-color: var(--brand);
+		color: #fff;
+	}
+	.ptree li.bad .pdot {
+		background: var(--red);
+		border-color: var(--red);
+		color: #fff;
+	}
+	.ptree li.now {
+		color: var(--ink);
+		font-weight: 600;
+	}
+	.ptree li.now .pdot {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 4px rgba(93, 240, 168, 0.18);
+		animation: pulse 1.2s infinite;
+	}
+	@keyframes pulse {
+		50% {
+			box-shadow: 0 0 0 7px rgba(93, 240, 168, 0.05);
+		}
+	}
+	.pv {
+		font: 11.5px var(--mono);
+		color: var(--muted-2);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 400;
+	}
+	.pfoot {
+		margin-top: 8px;
+		padding-top: 8px;
+		border-top: 1px solid var(--line);
+		font: 11.5px var(--mono);
+		color: var(--muted-2);
+	}
+	/* live detail feed */
+	.feed {
+		border: 1px solid var(--line-strong);
+		border-radius: var(--radius);
+		background: #03050b;
+		padding: 10px;
+		height: 380px;
+		overflow: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		scroll-behavior: smooth;
+	}
+	.fcard {
+		border: 1px solid var(--line);
+		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.02);
+		flex: none;
+	}
+	.fcard.open {
+		border-color: var(--brand-line);
+		background: rgba(31, 75, 255, 0.07);
+	}
+	.fhead {
+		display: grid;
+		grid-template-columns: 18px auto minmax(0, 1fr);
+		gap: 8px;
+		align-items: center;
+		width: 100%;
+		padding: 8px 12px;
+		background: none;
+		border: 0;
+		color: var(--ink);
+		font: 13px var(--font);
+		text-align: left;
+		cursor: pointer;
+	}
+	.fdot {
+		font: 700 11px var(--mono);
+		color: var(--brand-2);
+	}
+	.fcard.done .fdot {
+		color: var(--accent);
+	}
+	.fcard.bad .fdot {
+		color: var(--red);
+	}
+	.fsum {
+		font: 11.5px var(--mono);
+		color: var(--muted-2);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.fbody {
+		padding: 2px 12px 12px 38px;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		font-size: 13px;
+	}
+	.code {
+		font: 11.5px/1.6 var(--mono);
+		color: var(--cyan);
+		background: #010205;
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		padding: 8px 10px;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.chips-s {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.tchip {
+		font: 12px var(--mono);
+		padding: 2px 10px;
+		border-radius: 999px;
+		background: rgba(93, 240, 168, 0.12);
+		color: var(--accent);
+	}
+	.fnote {
+		font-size: 11.5px;
+		color: var(--muted-2);
+		overflow-wrap: anywhere;
+	}
+	.kv-h {
+		font: 600 10.5px var(--mono);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--muted-2);
+		margin-top: 4px;
+	}
+	.kv {
+		display: flex;
+		justify-content: space-between;
+		gap: 10px;
+		font-size: 12.5px;
+	}
+	.kv.dim {
+		opacity: 0.4;
+	}
+	.rules {
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		font-size: 12.5px;
+		color: var(--muted);
+	}
+	.rules code {
+		font: 12px var(--mono);
+		color: var(--cyan);
+	}
+	.kd {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 12px;
+		font: 12px var(--mono);
+		color: var(--muted);
+	}
+	.kd .k b {
+		color: var(--accent);
+	}
+	.kd .d b {
+		color: var(--red);
+	}
+	.drow {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		gap: 2px 10px;
+		padding: 8px 10px;
+		border-radius: 10px;
+		border: 1px solid var(--line);
+		background: rgba(0, 0, 0, 0.3);
+	}
+	.drow:hover {
+		border-color: var(--brand-line);
+	}
+	.drow .n {
+		font: 700 12px var(--mono);
+		color: var(--brand-2);
+		grid-row: span 2;
+		align-self: center;
+	}
+	.drow .name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.drow .price {
+		font: 600 13px var(--mono);
+		color: var(--accent);
+		text-align: right;
+	}
+	.drow .price small {
+		display: block;
+		font: 11px var(--mono);
+		color: var(--muted-2);
+	}
+	.drow .meta {
+		grid-column: 2 / 4;
+		display: flex;
+		gap: 6px;
+		align-items: center;
+		font: 11px var(--mono);
+		color: var(--muted-2);
+	}
+	.vrow {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 12px;
+		font: 12px var(--mono);
+	}
+	.vrow .n {
+		color: var(--brand-2);
+	}
+	.okc {
+		color: var(--accent);
+	}
+	.vrow .bad {
+		color: var(--red);
+	}
+	.payline {
+		font-size: 14px;
+		color: var(--ink);
+	}
+	.payline b {
+		color: var(--amber);
+		font-family: var(--mono);
+	}
+	.payline.bad {
+		color: var(--red);
+	}
+	@media (max-width: 1000px) {
+		.side {
+			position: static;
+		}
+		.feed {
+			height: 340px;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ptree li.now .pdot {
+			animation: none;
+		}
+		.ptrack i {
+			transition: none;
 		}
 	}
 </style>

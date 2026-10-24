@@ -38,6 +38,8 @@ export interface TreeCategory {
 export interface MonitorTree {
 	sites: SiteInfo[];
 	totals: { sites: number; products: number; categories: number; lastScraped: string | null };
+	/** When collection started (earliest first_seen_at) and products added per 15 minutes since. */
+	collection: { since: string | null; buckets: { t: string; n: number }[] };
 	categories: TreeCategory[];
 	recent: Product[];
 }
@@ -134,6 +136,13 @@ export async function getTree(): Promise<MonitorTree> {
 				order by p.first_seen_at desc, p.id desc) rn
 			from ${FROM} where p.active) t where rn <= 3 order by first_seen_at desc limit 12`
 	);
+	const buckets = await db.execute<{ t: Date | string; n: number }>(
+		sql`select to_timestamp(floor(extract(epoch from first_seen_at) / 900) * 900) as t, count(*)::int as n
+			from products group by 1 order by 1`
+	);
+	const [first] = await db.execute<{ t: Date | string | null }>(
+		sql`select min(first_seen_at) as t from products`
+	);
 	const [lastRun] = await db.execute<{ at: Date | string | null }>(
 		sql`select coalesce(finished_at, started_at) as at from scrape_runs order by started_at desc limit 1`
 	);
@@ -153,6 +162,10 @@ export async function getTree(): Promise<MonitorTree> {
 			products: sitesInfo.reduce((a, s) => a + s.count, 0),
 			categories: catRows.length,
 			lastScraped: lastRun?.at ? iso(lastRun.at) : null
+		},
+		collection: {
+			since: first?.t ? iso(first.t) : null,
+			buckets: [...buckets].map((b) => ({ t: iso(b.t), n: b.n }))
 		},
 		categories: top.map((t) => ({
 			name: t.name,
