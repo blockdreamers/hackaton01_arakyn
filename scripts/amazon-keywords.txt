@@ -1,101 +1,114 @@
-# Amazon keyword discovery input (one per line, # = comment). DRAFT: review before running.
-# Theme: science / STEM education supplies, to match the iaansci catalog.
-microscope for kids
-compound microscope
-digital microscope
-microscope slides prepared
-stereo microscope
-telescope for kids
-magnifying glass
-science kit for kids
-chemistry set
-physics experiment kit
-electricity kit for kids
-circuit kit
-snap circuits
-magnet set science
-bar magnets
-horseshoe magnet
-iron filings
-compass for kids
-prism glass optics
-lens set optics
-laser pointer science
-spring scale
-digital scale lab
-balance scale education
-stopwatch
-thermometer lab
-digital thermometer probe
-hygrometer
-ph test strips
-litmus paper
-test tubes
-test tube rack
-beaker set
-graduated cylinder
-erlenmeyer flask
-petri dish
-pipette dropper
-lab safety goggles
-lab coat kids
-nitrile gloves lab
-alcohol lamp
-bunsen burner
-hot plate magnetic stirrer
-funnel lab
-filter paper lab
-crystal growing kit
-volcano kit
-slime kit
-rock collection kit
-fossil kit
-geology kit
-mineral specimens
-solar system model
-planetarium projector
-globe for kids
-weather station kids
-rain gauge
-anemometer
-human anatomy model
-skeleton model
-heart model anatomy
-brain model anatomy
-dna model kit
-cell model
-plant growing kit
-ant farm
-butterfly growing kit
-insect collection kit
-bug catcher kit
-terrarium kit
-stem toys
-robotics kit
-arduino starter kit
-coding robot for kids
-raspberry pi kit
-solar power kit
-wind turbine kit
-hydraulic arm kit
-gear set educational
-pulley system kit
-newton's cradle
-gyroscope toy
-balloon car kit
-rocket launcher kids
-model rocket kit
-light experiment kit
-sound experiment kit
-tuning fork set
-color filter set
-uv flashlight
-glow in the dark experiment
-math manipulatives
-geometric solids
-fraction tiles
-abacus
-base ten blocks
-measuring tape kids
-graph paper notebook
-lab notebook
+# Amazon keyword discovery input (one per line, # = comment)
+# MRO / industrial supplies, 100 keywords
+
+# 체결류 / Fasteners (20)
+hex bolt
+socket head cap screw
+countersunk screw
+button head screw
+set screw
+hex nut
+nylon lock nut
+flange nut
+wing nut
+flat washer
+spring lock washer
+threaded rod
+eye bolt
+anchor bolt
+wood screw
+self tapping screw
+blind rivet
+rivet nut
+threaded insert
+hose clamp
+
+# 전기·케이블 / Electrical & cables (20)
+USB-C cable
+HDMI cable
+ethernet cable Cat6
+extension cord
+power strip
+electrical wire AWG
+heat shrink tubing
+cable tie
+cable gland
+wire connector
+terminal block
+crimp terminal
+fuse
+circuit breaker
+toggle switch
+push button switch
+relay
+LED strip
+AC DC power adapter
+battery AA/18650
+
+# 기계 요소 / Mechanical components (20)
+ball bearing
+linear bearing
+shaft collar
+shaft coupling
+timing belt
+V-belt
+sprocket
+roller chain
+spur gear
+compression spring
+extension spring
+O-ring
+oil seal
+bushing
+dowel pin
+retaining ring
+caster wheel
+hinge
+drawer slide
+gas spring
+
+# 배관·유체 / Plumbing & fluid (15)
+pipe fitting
+PVC pipe
+ball valve
+check valve
+hose barb fitting
+quick connect fitting
+pneumatic fitting
+pneumatic tubing
+garden hose connector
+thread seal tape
+pressure gauge
+solenoid valve
+water filter cartridge
+pipe clamp
+gasket
+
+# 공구·소모품 / Tools & consumables (15)
+drill bit
+hole saw
+saw blade
+sanding disc
+cutting wheel
+screwdriver bit
+hex key set
+socket set
+tape measure
+utility knife blade
+safety gloves
+safety glasses
+earplugs
+duct tape
+epoxy adhesive
+
+# 소재·포장 / Materials & packaging (10)
+aluminum sheet
+stainless steel sheet
+acrylic sheet
+rubber sheet
+foam sheet
+aluminum extrusion
+steel angle bar
+corrugated box
+bubble wrap
+stretch film

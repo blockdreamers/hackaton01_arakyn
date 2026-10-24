@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import { and, count, desc, eq } from 'drizzle-orm';
 import { db } from '#lib/server/db/index.ts';
 import { products, scrapeRuns, sites } from '#lib/server/db/schema.ts';
-import { executeRun, startRun } from '#lib/server/scraper/index.ts';
+import { executeRun, scrapers, startRun } from '#lib/server/scraper/index.ts';
 import { requireAdmin } from '#lib/server/admin.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -37,17 +37,23 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(desc(scrapeRuns.id))
 		.limit(10);
 
-	return { siteStats, runs };
+	return { siteStats, runs, scrapers: Object.keys(scrapers) };
 };
 
 export const actions: Actions = {
 	scrape: async ({ locals, request }) => {
 		requireAdmin(locals.user);
-		const site = String((await request.formData()).get('site') ?? 'iaansci');
+		const form = await request.formData();
+		const site = String(form.get('site') ?? '');
+		const categories = String(form.get('categories') ?? '')
+			.split(',')
+			.map((c) => c.trim())
+			.filter(Boolean);
+		const maxPages = Number(form.get('maxPages')) || undefined;
 
 		let started;
 		try {
-			started = await startRun(db, site);
+			started = await startRun(db, site, { categories, maxPages });
 		} catch (e) {
 			return fail(409, { error: e instanceof Error ? e.message : String(e) });
 		}

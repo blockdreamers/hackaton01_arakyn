@@ -56,6 +56,7 @@ export const iaansci: SiteScraper = {
 	baseUrl: BASE,
 	country: 'KR',
 	currency: 'KRW',
+	delayMs: 1000,
 
 	async categories(fetch) {
 		const root = parse(await fetch(`${BASE}/`));
@@ -68,10 +69,10 @@ export const iaansci: SiteScraper = {
 		return [...found].map(([id, name]) => ({ id, name }));
 	},
 
-	async *categoryPages(fetch, category: Category) {
+	async *categoryPages(fetch, category: Category, maxPages) {
 		const url = (page: number) => `${BASE}/product/list.html?cate_no=${category.id}&page=${page}`;
 		const first = await fetch(url(1));
-		const pages = Math.ceil(parseTotal(first) / PAGE_SIZE);
+		const pages = Math.min(Math.ceil(parseTotal(first) / PAGE_SIZE), maxPages);
 		yield parseProducts(first);
 		for (let page = 2; page <= pages; page++) {
 			const items = parseProducts(await fetch(url(page)));

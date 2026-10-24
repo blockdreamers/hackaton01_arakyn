@@ -22,10 +22,20 @@
 	</tbody>
 </table>
 
+<h2>수집 실행</h2>
 <form method="POST" action="?/scrape" use:enhance>
-	<input type="hidden" name="site" value="iaansci" />
-	<button>iaansci 다시 긁기</button>
+	<label>
+		사이트
+		<select name="site">
+			{#each data.scrapers as code (code)}<option>{code}</option>{/each}
+		</select>
+	</label>
+	<label>카테고리 (쉼표, 비우면 전체) <input name="categories" placeholder="c-23,c-24" /></label>
+	<label>카테고리당 최대 페이지 (비우면 전체) <input name="maxPages" type="number" min="1" /></label
+	>
+	<button>다시 긁기</button>
 </form>
+<p>카테고리나 페이지를 제한하면 기존 데이터에 추가만 하고, 판매 중지 처리는 하지 않습니다.</p>
 {#if form?.error}<p>{form.error}</p>{/if}
 {#if form?.started}<p>수집 #{form.started} 시작됨. 새로고침하면 진행 상황이 보입니다.</p>{/if}
 

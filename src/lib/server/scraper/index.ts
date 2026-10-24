@@ -1,23 +1,26 @@
-import { and, eq, lt, sql } from 'drizzle-orm';
+import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.ts';
 import { products, scrapeRuns, sites } from '../db/schema.ts';
 import { iaansci } from './sources/iaansci.ts';
-import type { Fetcher, ScrapedProduct, SiteScraper } from './types.ts';
+import { navimro } from './sources/navimro.ts';
+import type { Fetcher, ScrapedProduct, ScrapeOptions, SiteScraper } from './types.ts';
 
-export const scrapers: Record<string, SiteScraper> = { [iaansci.code]: iaansci };
+export const scrapers: Record<string, SiteScraper> = {
+	[iaansci.code]: iaansci,
+	[navimro.code]: navimro
+};
 
 const USER_AGENT = 'AgentCatalogBot/0.1 (+https://agent-catalog.techtree.kr)';
-const DELAY_MS = 1000;
 // a run still "running" after this long was killed (e.g. server restart)
-const STALE_MS = 2 * 60 * 60 * 1000;
+const STALE_MS = 24 * 60 * 60 * 1000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function politeFetcher(onPage: () => void): Fetcher {
+function politeFetcher(delayMs: number, onPage: () => void): Fetcher {
 	let last = 0;
 	return async (url) => {
 		for (let attempt = 1; ; attempt++) {
-			const wait = last + DELAY_MS - Date.now();
+			const wait = last + delayMs - Date.now();
 			if (wait > 0) await sleep(wait);
 			last = Date.now();
 			try {
@@ -27,7 +30,7 @@ function politeFetcher(onPage: () => void): Fetcher {
 				return await res.text();
 			} catch (e) {
 				if (attempt >= 3) throw e;
-				await sleep(DELAY_MS * 5 * attempt);
+				await sleep(delayMs * 5 * attempt);
 			}
 		}
 	};
@@ -50,7 +53,7 @@ async function ensureSite(db: Db, s: SiteScraper) {
 }
 
 /** Creates a run row, or throws if one is already running for the site */
-export async function startRun(db: Db, code: string) {
+export async function startRun(db: Db, code: string, options: ScrapeOptions = {}) {
 	const scraper = scrapers[code];
 	if (!scraper) throw new Error(`Unknown site: ${code}`);
 	const site = await ensureSite(db, scraper);
@@ -73,90 +76,105 @@ export async function startRun(db: Db, code: string) {
 
 	const [run] = await db
 		.insert(scrapeRuns)
-		.values({ siteId: site.id, status: 'running' })
+		.values({ siteId: site.id, status: 'running', input: options })
 		.returning();
-	return { run, site, scraper };
+	return { run, site, scraper, options };
 }
 
 type Started = Awaited<ReturnType<typeof startRun>>;
 
-export async function executeRun(db: Db, { run, site, scraper }: Started, log = console.log) {
+export async function executeRun(
+	db: Db,
+	{ run, site, scraper, options }: Started,
+	log = console.log
+) {
 	let pagesFetched = 0;
-	const fetchPage = politeFetcher(() => pagesFetched++);
-	// product -> categories seen in this run
-	const seen = new Map<string, { product: ScrapedProduct; categories: Set<string> }>();
+	const fetchPage = politeFetcher(scraper.delayMs, () => pagesFetched++);
+	const seenThisRun = and(eq(products.siteId, site.id), gte(products.lastSeenAt, run.startedAt));
+	const countSeen = async () => {
+		const [{ n }] = await db
+			.select({ n: sql<number>`count(*)::int` })
+			.from(products)
+			.where(seenThisRun);
+		return n;
+	};
 
-	const flush = async (ids: Iterable<string>) => {
-		const rows = [...ids].map((id) => {
-			const { product, categories } = seen.get(id)!;
-			return { ...product, siteId: site.id, categories: [...categories], active: true };
-		});
-		for (let i = 0; i < rows.length; i += 500) {
-			await db
-				.insert(products)
-				.values(rows.slice(i, i + 500))
-				.onConflictDoUpdate({
-					target: [products.siteId, products.externalId],
-					set: {
-						name: sql`excluded.name`,
-						price: sql`excluded.price`,
-						listPrice: sql`excluded.list_price`,
-						imageUrl: sql`excluded.image_url`,
-						url: sql`excluded.url`,
-						categories: sql`excluded.categories`,
-						active: true,
-						lastSeenAt: sql`now()`
-					}
-				});
-		}
+	// Saved page by page so memory stays flat on large sites. A product listed in several
+	// categories collects them during the run. A full run replaces categories from earlier
+	// runs; a partial run (some categories / pages) only adds to them.
+	const partial = !!(options.categories?.length || options.maxPages);
+	const union = sql`(select array(select distinct unnest(${products.categories} || excluded.categories)))`;
+	const save = async (items: ScrapedProduct[], category: string) => {
+		const unique = [...new Map(items.map((p) => [p.externalId, p])).values()];
+		if (unique.length === 0) return;
+		await db
+			.insert(products)
+			.values(unique.map((p) => ({ ...p, siteId: site.id, categories: [category] })))
+			.onConflictDoUpdate({
+				target: [products.siteId, products.externalId],
+				set: {
+					name: sql`excluded.name`,
+					price: sql`excluded.price`,
+					listPrice: sql`excluded.list_price`,
+					imageUrl: sql`excluded.image_url`,
+					url: sql`excluded.url`,
+					brand: sql`excluded.brand`,
+					categories: partial
+						? union
+						: sql`case when ${products.lastSeenAt} >= ${run.startedAt.toISOString()}
+							then ${union} else excluded.categories end`,
+					active: true,
+					lastSeenAt: sql`now()`
+				}
+			});
 	};
 
 	try {
-		const categories = await scraper.categories(fetchPage);
-		log(`[${site.code}] ${categories.length} categories`);
+		const all = await scraper.categories(fetchPage);
+		const categories = options.categories?.length
+			? all.filter((c) => options.categories!.includes(c.id))
+			: all;
+		log(`[${site.code}] ${categories.length}/${all.length} categories`);
 
 		for (const category of categories) {
-			const touched = new Set<string>();
-			for await (const items of scraper.categoryPages(fetchPage, category)) {
-				for (const product of items) {
-					const entry = seen.get(product.externalId);
-					if (entry) entry.categories.add(category.name);
-					else seen.set(product.externalId, { product, categories: new Set([category.name]) });
-					touched.add(product.externalId);
-				}
+			let found = 0;
+			for await (const items of scraper.categoryPages(
+				fetchPage,
+				category,
+				options.maxPages ?? Infinity
+			)) {
+				await save(items, category.name);
+				found += items.length;
 			}
-			await flush(touched);
+			const productsFound = await countSeen();
 			await db
 				.update(scrapeRuns)
-				.set({ pagesFetched, productsFound: seen.size })
+				.set({ pagesFetched, productsFound })
 				.where(eq(scrapeRuns.id, run.id));
 			log(
-				`[${site.code}] ${category.name}: ${touched.size} products (total ${seen.size}, ${pagesFetched} pages)`
+				`[${site.code}] ${category.name}: ${found} products (total ${productsFound}, ${pagesFetched} pages)`
 			);
 		}
 
-		// anything not seen in this full run is no longer listed
-		await db
-			.update(products)
-			.set({ active: false })
-			.where(and(eq(products.siteId, site.id), lt(products.lastSeenAt, run.startedAt)));
+		// only a full run can tell that a product is no longer listed
+		if (!partial) {
+			await db
+				.update(products)
+				.set({ active: false })
+				.where(and(eq(products.siteId, site.id), lt(products.lastSeenAt, run.startedAt)));
+		}
 
+		const productsFound = await countSeen();
 		await db
 			.update(scrapeRuns)
-			.set({ status: 'succeeded', pagesFetched, productsFound: seen.size, finishedAt: new Date() })
+			.set({ status: 'succeeded', pagesFetched, productsFound, finishedAt: new Date() })
 			.where(eq(scrapeRuns.id, run.id));
-		log(`[${site.code}] done: ${seen.size} products, ${pagesFetched} pages`);
+		log(`[${site.code}] done: ${productsFound} products, ${pagesFetched} pages`);
 	} catch (e) {
 		const error = e instanceof Error ? e.message : String(e);
 		await db
 			.update(scrapeRuns)
-			.set({
-				status: 'failed',
-				error,
-				pagesFetched,
-				productsFound: seen.size,
-				finishedAt: new Date()
-			})
+			.set({ status: 'failed', error, pagesFetched, finishedAt: new Date() })
 			.where(eq(scrapeRuns.id, run.id));
 		log(`[${site.code}] failed: ${error}`);
 		throw e;

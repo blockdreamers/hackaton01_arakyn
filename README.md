@@ -39,16 +39,23 @@ The ID token is verified server-side (`/auth/google`), users and sessions are st
 
 ## Scraper
 
-Collects product name, price, list price, image URL, link and categories from shop listing pages into
+Collects product name, price, image URL, link, brand and categories from shop listing pages into
 `products`. Each shop is a row in `sites` with its country (ISO 3166-1, e.g. `KR`) and currency
 (ISO 4217, e.g. `KRW`); prices are stored in the site's currency.
 
-- Run from the CLI: `bun run scrape [site]` (default `iaansci`)
-- Or press "다시 긁기" on `/dashboard` (runs in the background, progress in `scrape_runs`)
+| site | listing | size (Oct 2026) | delay |
+|---|---|---|---|
+| `iaansci` (이안과학, Cafe24) | `/product/list.html?cate_no=N&page=P` | ~24k products, ~700 pages, ~12 min | 1 s |
+| `navimro` (나비엠알오) | `/s/c-NN/page-P/?hits=90` | ~2.07M products, ~23k pages (~2 MB each) | 2 s |
 
-One request per second, identified as `AgentCatalogBot`, only robots.txt-allowed pages. Products
-missing from a finished run are marked `active = false`. To add a shop, implement `SiteScraper`
-in `src/lib/server/scraper/sources/` and register it in `src/lib/server/scraper/index.ts`.
+- CLI: `bun run scrape <site> [--categories c-23,c-24] [--max-pages 10]`
+- Or `/nimda` (admin only): pick site and optional range, runs in the background, progress in `scrape_runs`
+
+Only robots.txt-allowed pages, identified as `AgentCatalogBot`. Products are saved page by page.
+A full run marks products it didn't see `active = false`; a run limited by categories or pages
+only adds data. A server restart (e.g. a deploy) stops a running scrape; it is marked failed after
+24 h, or can be re-run right away from the CLI. To add a shop, implement `SiteScraper` in
+`src/lib/server/scraper/sources/` and register it in `src/lib/server/scraper/index.ts`.
 
 ## API
 
