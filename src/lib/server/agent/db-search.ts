@@ -37,10 +37,20 @@ export const SEARCH_OFFERS_SCHEMA = {
 } as const;
 
 // Fixed demo rates so prices from KR/JP/US shops rank on one scale.
-export const KRW_PER = { KRW: 1, USD: 1380, JPY: 9.2 } as Record<string, number>;
+export const KRW_PER = { KRW: 1, USD: 1380, JPY: 9.2, GBP: 1750, EUR: 1500 } as Record<
+	string,
+	number
+>;
+/** SQL multiplier from a currency column to KRW, same table as KRW_PER. */
+export const krwRateSql = (currencyCol: string) =>
+	sql.raw(
+		`case ${currencyCol} ${Object.entries(KRW_PER)
+			.map(([c, r]) => `when '${c}' then ${r}`)
+			.join(' ')} else 1 end`
+	);
 export const toKrw = (price: number | null, currency: string) =>
 	price == null ? null : Math.round(price * (KRW_PER[currency] ?? 1));
-const priceKrwSql = sql`(${products.price} * case ${sites.currency} when 'USD' then 1380 when 'JPY' then 9.2 else 1 end)`;
+const priceKrwSql = sql`(${products.price} * ${krwRateSql('"sites"."currency"')})`;
 
 const like = (t: string) => `%${t.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
 
@@ -118,8 +128,7 @@ export function verifyRows(spec: Spec, out: SearchOutput) {
 			check: 'price',
 			ok:
 				spec.max_unit_price == null ||
-				(r.price_krw ?? Infinity) <=
-					spec.max_unit_price * (KRW_PER[spec.currency ?? 'KRW'] ?? 1)
+				(r.price_krw ?? Infinity) <= spec.max_unit_price * (KRW_PER[spec.currency ?? 'KRW'] ?? 1)
 		},
 		{ row: r.id, check: 'listed', ok: r.price != null }
 	]);

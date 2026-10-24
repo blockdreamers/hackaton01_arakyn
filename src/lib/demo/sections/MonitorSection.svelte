@@ -4,7 +4,7 @@
 	// Read-only and LLM-free, so running it costs nothing.
 	import { onMount, tick } from 'svelte';
 	import { countSearch } from '#lib/demo/stats.ts';
-	import type { MonitorTree, MonitorSearchResult, TraceRow } from '#lib/server/monitor.ts';
+	import type { MonitorTree, MonitorSearchResult, Product, TraceRow } from '#lib/server/monitor.ts';
 
 	type StepKey = 'request' | 'parse' | 'index' | 'filter' | 'deliver' | 'verify' | 'pay';
 	type StepState = 'idle' | 'on' | 'done' | 'bad';
@@ -17,7 +17,7 @@
 		{ key: 'verify', label: 'Verify' },
 		{ key: 'pay', label: 'Pay' }
 	];
-	const HINTS = ['네오디움 자석', 'LED', '모터', '건전지 홀더'];
+	const HINTS = ['LED', '캐스터', '자석', 'socket screw'];
 
 	let tree = $state<MonitorTree | null>(null);
 	let loadError = $state('');
@@ -27,6 +27,10 @@
 	let open = $state<Record<string, boolean>>({});
 	let catStatus = $state<Record<string, 'match' | 'skip'>>({});
 	let catMatches = $state<Record<string, number>>({});
+	let siteStatus = $state<Record<string, 'match' | 'skip'>>({});
+	let siteMatches = $state<Record<string, number>>({});
+	let siteRows = $state<Record<string, Product[]>>({});
+	let detail = $state<number | null>(null);
 	let rowStatus = $state<Record<number, 'scan' | 'match' | 'skip'>>({});
 	let shownRows = $state<Record<string, TraceRow[]>>({});
 	let cursor = $state<string | null>(null);
@@ -52,7 +56,18 @@
 				? `₩${fmt(p)}`
 				: cur === 'JPY'
 					? `¥${fmt(p)}`
-					: `$${p.toFixed(2)}`;
+					: cur === 'GBP'
+						? `£${p.toFixed(2)}`
+						: cur === 'EUR'
+							? `€${p.toFixed(2)}`
+							: `${p.toFixed(2)}`;
+	const krw = (p: Product) =>
+		p.currency === 'KRW' || p.priceKrw == null ? '' : `≈₩${fmt(p.priceKrw)}`;
+	const off = (p: Product) =>
+		p.listPrice && p.price && p.listPrice > p.price
+			? Math.round((1 - p.price / p.listPrice) * 100)
+			: 0;
+	const day = (iso: string) => iso.slice(0, 10);
 	const ago = (iso: string | null) => {
 		if (!iso) return 'never';
 		const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -67,7 +82,10 @@
 		try {
 			const r = await fetch('/api/monitor/tree');
 			if (!r.ok) throw new Error(String(r.status));
-			tree = await r.json();
+			const t: MonitorTree = await r.json();
+			// open the two biggest categories so there is data to look at before any search
+			for (const c of t.categories.slice(0, 2)) open[c.name] = true;
+			tree = t;
 		} catch (e) {
 			loadError = `Could not read the database (${(e as Error).message}).`;
 		}
@@ -98,9 +116,12 @@
 		res = null;
 		catStatus = {};
 		catMatches = {};
+		siteStatus = {};
+		siteMatches = {};
+		siteRows = {};
+		detail = null;
 		rowStatus = {};
 		shownRows = {};
-		open = {};
 		steps = freshSteps();
 		log = [];
 		evaluated = 0;
@@ -131,7 +152,24 @@
 		note(`parse    terms = [${data.terms.join(', ')}]`);
 		await wait(350);
 
-		// stage 1: walk the category folders
+		// stage 1: which shops have matches
+		steps.index = { s: 'on', v: 'scanning sites…' };
+		for (const st of data.sites) {
+			if (my !== token) return;
+			await follow(`site:${st.code}`);
+			siteStatus[st.code] = st.matches > 0 ? 'match' : 'skip';
+			siteMatches[st.code] = st.matches;
+			if (st.rows.length) {
+				siteRows[st.code] = st.rows;
+				open[`site:${st.code}`] = true;
+			}
+			evaluated++;
+			await wait(120);
+		}
+		const hitSites = data.sites.filter((x) => x.matches > 0).length;
+		note(`sites    ${hitSites}/${data.sites.length} shops have matches`);
+
+		// stage 2: walk the category folders
 		steps.index = { s: 'on', v: 'scanning categories…' };
 		for (const c of data.categories) {
 			if (my !== token) return;
@@ -142,10 +180,13 @@
 			await wait(70);
 		}
 		const hitCats = data.categories.filter((c) => c.matches > 0).length;
-		steps.index = { s: 'done', v: `${hitCats} of ${data.categories.length} categories hit` };
+		steps.index = {
+			s: 'done',
+			v: `${hitSites} of ${data.sites.length} sites · ${hitCats} of ${data.categories.length} categories`
+		};
 		note(`index    ${hitCats}/${data.categories.length} categories contain a term`);
 
-		// stage 2: open the busiest matching categories and walk their rows
+		// stage 3: open the busiest matching categories and walk their rows
 		steps.filter = { s: 'on', v: 'checking rows…' };
 		const byCat: Record<string, TraceRow[]> = {};
 		for (const row of data.rows) (byCat[row.category] ??= []).push(row);
@@ -205,6 +246,41 @@
 	const sitesTotal = $derived(tree ? tree.sites.length : 0);
 </script>
 
+{#snippet prow(p: Product, depth: string, status?: string, reason?: string)}
+	{@const rk = rank(p.id)}
+	{@const pct = off(p)}
+	<button
+		type="button"
+		class="row prow {depth} {status ?? ''}"
+		class:cur={cursor === `row:${p.id}`}
+		data-row={`row:${p.id}`}
+		onclick={() => (detail = detail === p.id ? null : p.id)}
+	>
+		{#if p.image}<img class="thumb" src={p.image} alt="" loading="lazy" />{:else}<span
+				class="thumb none"
+			></span>{/if}
+		{#if rk}<span class="rank">#{rk}</span>{/if}
+		<span class="nm prod">{p.name}</span>
+		<span class="sb">{p.site}</span>
+		<span class="pr">{money(p.price, p.currency)}</span>
+		{#if krw(p)}<span class="cv">{krw(p)}</span>{/if}
+		{#if pct}<span class="off">-{pct}%</span>{/if}
+		{#if status === 'skip' && reason}<span class="cm"># {reason}</span>{/if}
+	</button>
+	{#if detail === p.id}
+		<div class="detail {depth}">
+			<div class="dl">
+				{#each p.categories.slice(0, 4) as c (c)}<span class="cat">{c}</span>{/each}
+			</div>
+			<div class="dl mono">
+				first seen {day(p.firstSeen)} · last seen {day(p.lastSeen)}{#if p.listPrice && pct}
+					· list {money(p.listPrice, p.currency)}{/if}
+				· <a href={p.url} target="_blank" rel="noreferrer">open listing ↗</a>
+			</div>
+		</div>
+	{/if}
+{/snippet}
+
 <div class="mon">
 	<div class="chips">
 		<span class="chip live"><i></i>Live DB</span>
@@ -220,10 +296,46 @@
 		{/if}
 	</div>
 
+	{#if tree}
+		<div class="overview">
+			<div class="ov sites-ov">
+				<div class="ovh">Products by site</div>
+				{#each tree.sites as st (st.code)}
+					<div class="bar-row">
+						<span class="bar-l"
+							><b>{st.code}</b> <span class="cur">{st.country} · {st.currency}</span></span
+						>
+						<span class="bar"
+							><i style:width="{Math.max(1.5, (st.count / tree.sites[0].count) * 100)}%"></i></span
+						>
+						<span class="bar-n">{fmt(st.count)}</span>
+					</div>
+				{/each}
+			</div>
+			<div class="ov recent-ov">
+				<div class="ovh">Recently added</div>
+				<div class="strip">
+					{#each tree.recent as p (p.id)}
+						<a class="tile" href={p.url} target="_blank" rel="noreferrer">
+							{#if p.image}<img src={p.image} alt="" loading="lazy" />{:else}<span class="noimg"
+								></span>{/if}
+							<span class="tn">{p.name}</span>
+							<span class="tm"
+								><span class="sb">{p.site}</span>
+								<b>{money(p.price, p.currency)}</b>{#if krw(p)}
+									<span class="cv">{krw(p)}</span>{/if}</span
+							>
+						</a>
+					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
+
 	<form class="ask" onsubmit={submit}>
 		<input
 			bind:value={q}
-			placeholder="Search the index, e.g. 네오디움 자석"
+			placeholder="Search the index, e.g. LED, 캐스터, socket screw"
 			aria-label="Search the index"
 			disabled={running}
 		/>
@@ -248,19 +360,38 @@
 				{#if tree}
 					<div class="row folder" data-row="root">
 						<span class="nm">catalog.db/</span><span class="cm"
-							># {sitesTotal} sites · {fmt(tree.totals.products)} products</span
+							># {sitesTotal} sites · {fmt(tree.totals.products)} products · prices also in ₩</span
 						>
 					</div>
 					<div class="row folder d1"><span class="nm">sites/</span></div>
-					{#each tree.sites as s (s.code)}
-						<div class="row d2">
-							<span class="nm site">{s.code}</span><span class="cm"
-								># {s.name} · {s.country} · {s.currency} · {fmt(s.count)}</span
+					{#each tree.sites as st (st.code)}
+						{@const ss = siteStatus[st.code]}
+						{@const isOpen = open[`site:${st.code}`]}
+						<button
+							type="button"
+							class="row folder d2 {ss ?? ''}"
+							class:cur={cursor === `site:${st.code}`}
+							data-row={`site:${st.code}`}
+							onclick={() => (open[`site:${st.code}`] = !isOpen)}
+						>
+							<span class="caret">{isOpen ? '▾' : '▸'}</span><span class="nm site">{st.code}/</span
+							><span class="cm"
+								># {ss === 'match'
+									? `${fmt(siteMatches[st.code] ?? 0)} match`
+									: ss === 'skip'
+										? 'no match'
+										: `${st.name} · ${st.currency} · ${fmt(st.count)}`}</span
 							>
-						</div>
+						</button>
+						{#if isOpen}
+							{#each siteRows[st.code] ?? st.samples as p (p.id)}
+								{@render prow(p, 'd3', siteRows[st.code] ? 'match' : undefined)}
+							{/each}
+						{/if}
 					{/each}
 					<div class="row folder d1">
-						<span class="nm">categories/</span><span class="cm"># top {tree.categories.length}</span
+						<span class="nm">categories/</span><span class="cm"
+							># top {tree.categories.length} of {tree.totals.categories}</span
 						>
 					</div>
 					{#each tree.categories as c (c.name)}
@@ -283,22 +414,15 @@
 							>
 						</button>
 						{#if isOpen}
-							{#each shownRows[c.name] ?? c.products as p (p.id)}
-								{@const rs = rowStatus[p.id]}
-								{@const rk = rank(p.id)}
-								<div
-									class="row d3 {rs ?? ''}"
-									class:cur={cursor === `row:${p.id}`}
-									data-row={`row:${p.id}`}
-								>
-									{#if rk}<span class="rank">#{rk}</span>{/if}<span class="nm prod">{p.name}</span
-									><span class="cm"
-										># {money(p.price, p.currency)}{rs === 'skip' && 'reason' in p
-											? ` · ${p.reason}`
-											: ''}</span
-									>
-								</div>
-							{/each}
+							{#if shownRows[c.name]}
+								{#each shownRows[c.name] as p (p.id)}
+									{@render prow(p, 'd3', rowStatus[p.id], p.reason)}
+								{/each}
+							{:else}
+								{#each c.products as p (p.id)}
+									{@render prow(p, 'd3')}
+								{/each}
+							{/if}
 						{/if}
 					{/each}
 				{:else}
@@ -309,7 +433,8 @@
 				{#if res}
 					real query {res.realMs} ms · replay {(replayMs / 1000).toFixed(1)} s · {evaluated} rows evaluated
 				{:else}
-					Run a search to watch the engine walk the index
+					Click a folder to open it, a row for details. Run a search to watch the engine walk the
+					index.
 				{/if}
 			</div>
 		</div>
@@ -336,14 +461,18 @@
 						>{/if}
 				</div>
 				{#if res?.top.length}
-					{#each res.top.slice(0, 3) as r, i (r.id)}
+					{#each res.top.slice(0, 5) as r, i (r.id)}
 						<a class="card" href={r.url} target="_blank" rel="noreferrer">
 							<span class="n">#{i + 1}</span>
 							<span class="name">{r.name}</span>
-							<span class="price">{money(r.price, r.currency)}</span>
-							<span class="meta">{r.site} · seen {r.seen}</span>
+							<span class="price"
+								>{money(r.price, r.currency)}{#if r.currency !== 'KRW' && r.price_krw != null}
+									<small>≈₩{fmt(r.price_krw)}</small>{/if}</span
+							>
+							<span class="meta"><span class="sb">{r.site}</span> seen {r.seen}</span>
 						</a>
 					{/each}
+					<p class="fx">Ranked in KRW at fixed rates: $1 = ₩1,380 · ¥1 = ₩9.2 · £1 = ₩1,750</p>
 				{:else if res}
 					<p class="empty">No product in the index matches “{res.query}”.</p>
 				{:else}
@@ -694,6 +823,9 @@
 		color: var(--accent);
 	}
 	.card .meta {
+		display: flex;
+		gap: 6px;
+		align-items: center;
 		grid-column: 2 / 4;
 		font: 11.5px var(--mono);
 		color: var(--muted-2);
@@ -741,6 +873,214 @@
 	@media (prefers-reduced-motion: reduce) {
 		.chip.live i {
 			animation: none;
+		}
+	}
+	/* overview: per-site breakdown and recently added */
+	.overview {
+		display: grid;
+		grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr);
+		gap: 14px;
+	}
+	.ov {
+		border: 1px solid var(--line-strong);
+		border-radius: var(--radius);
+		background: var(--glass);
+		padding: 14px 16px;
+		min-width: 0;
+	}
+	.ovh {
+		font: 600 11px var(--mono);
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--muted-2);
+		margin-bottom: 10px;
+	}
+	.bar-row {
+		display: grid;
+		grid-template-columns: 150px minmax(0, 1fr) 64px;
+		gap: 10px;
+		align-items: center;
+		font-size: 12.5px;
+		padding: 4px 0;
+	}
+	.bar-l b {
+		font: 600 12.5px var(--mono);
+		color: var(--cyan);
+	}
+	.bar-l .cur {
+		font: 11px var(--mono);
+		color: var(--muted-2);
+	}
+	.bar {
+		height: 6px;
+		border-radius: 3px;
+		background: rgba(255, 255, 255, 0.06);
+		overflow: hidden;
+	}
+	.bar i {
+		display: block;
+		height: 100%;
+		border-radius: 3px;
+		background: linear-gradient(90deg, var(--brand), var(--brand-2));
+	}
+	.bar-n {
+		font: 12px var(--mono);
+		text-align: right;
+		color: var(--muted);
+	}
+	.strip {
+		display: flex;
+		gap: 10px;
+		overflow-x: auto;
+		padding-bottom: 6px;
+		scroll-snap-type: x proximity;
+		align-items: flex-start;
+	}
+	.tile {
+		flex: 0 0 148px;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 8px;
+		border-radius: 12px;
+		border: 1px solid var(--line);
+		background: rgba(0, 0, 0, 0.25);
+		scroll-snap-align: start;
+	}
+	.tile:hover {
+		border-color: var(--brand-line);
+	}
+	.tile img,
+	.tile .noimg {
+		width: 100%;
+		aspect-ratio: 1;
+		object-fit: contain;
+		border-radius: 8px;
+		background: #fff;
+	}
+	.tile .noimg {
+		background: rgba(255, 255, 255, 0.05);
+	}
+	.tn {
+		font-size: 12.5px;
+		line-height: 1.35;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		min-height: 2.7em;
+	}
+	.tm {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 6px;
+		align-items: baseline;
+		font: 12px var(--mono);
+	}
+	.tm b {
+		color: var(--accent);
+		font-weight: 600;
+	}
+	.sb {
+		font: 500 10.5px var(--mono);
+		color: var(--cyan);
+		border: 1px solid rgba(92, 198, 255, 0.35);
+		border-radius: 4px;
+		padding: 0 5px;
+		line-height: 1.6;
+		white-space: nowrap;
+		flex: none;
+	}
+	.cv {
+		font: 11px var(--mono);
+		color: var(--muted-2);
+		white-space: nowrap;
+		flex: none;
+	}
+	/* product rows inside the tree */
+	.prow {
+		align-items: center;
+	}
+	.thumb {
+		flex: none;
+		width: 20px;
+		height: 20px;
+		border-radius: 4px;
+		object-fit: contain;
+		background: #fff;
+	}
+	.thumb.none {
+		background: rgba(255, 255, 255, 0.06);
+	}
+	.pr {
+		flex: none;
+		color: var(--accent);
+	}
+	.off {
+		flex: none;
+		font-size: 11px;
+		color: var(--red);
+	}
+	.prow .cm {
+		flex: 1 1 0;
+	}
+	.detail {
+		padding-top: 2px;
+		padding-bottom: 8px;
+		padding-right: 16px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 12px;
+		color: var(--muted);
+		white-space: normal;
+		line-height: 1.6;
+	}
+	.detail a {
+		color: var(--brand-2);
+	}
+	.dl {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.cat {
+		font: 11px var(--font);
+		padding: 0 8px;
+		border-radius: 999px;
+		background: rgba(61, 107, 255, 0.14);
+		color: var(--ink);
+		line-height: 1.8;
+	}
+	.price small {
+		display: block;
+		font: 11px var(--mono);
+		color: var(--muted-2);
+		text-align: right;
+	}
+	.fx {
+		font: 11px var(--mono);
+		color: var(--muted-2);
+	}
+	@media (max-width: 860px) {
+		.overview {
+			grid-template-columns: 1fr;
+		}
+		.bar-row {
+			grid-template-columns: 110px minmax(0, 1fr) 56px;
+		}
+	}
+	@media (max-width: 560px) {
+		.tile {
+			flex-basis: 116px;
+		}
+		.bar-l .cur {
+			display: none;
+		}
+		.prow .sb,
+		.prow .cv {
+			display: none;
 		}
 	}
 </style>
