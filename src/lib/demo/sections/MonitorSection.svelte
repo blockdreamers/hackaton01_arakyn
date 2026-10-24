@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ProductMarquee from '#lib/demo/ProductMarquee.svelte';
 	// Data monitor: the real connected DB as a terminal tree, and a traced keyword search replayed
 	// over it (cursor walks categories, then rows), next to a single pipeline of what happened.
 	// Read-only and LLM-free, so running it costs nothing.
@@ -313,21 +314,14 @@
 				{/each}
 			</div>
 			<div class="ov recent-ov">
-				<div class="ovh">Recently added</div>
-				<div class="strip">
-					{#each tree.recent as p (p.id)}
-						<a class="tile" href={p.url} target="_blank" rel="noreferrer">
-							{#if p.image}<img src={p.image} alt="" loading="lazy" />{:else}<span class="noimg"
-								></span>{/if}
-							<span class="tn">{p.name}</span>
-							<span class="tm"
-								><span class="sb">{p.site}</span>
-								<b>{money(p.price, p.currency)}</b>{#if krw(p)}
-									<span class="cv">{krw(p)}</span>{/if}</span
-							>
-						</a>
-					{/each}
-				</div>
+				<div class="ovh">Live from the index</div>
+				<p class="ovp">
+					A random sample of real listings from every source in the database, refreshed every few
+					minutes. Each card is one row the agent can search: photo, price in the shop's own
+					currency, key dimensions read from the product name, and the source site. Hover to pause,
+					click to open the listing.
+				</p>
+				<ProductMarquee embedded />
 			</div>
 		</div>
 	{/if}
@@ -888,6 +882,15 @@
 		padding: 14px 16px;
 		min-width: 0;
 	}
+	.ovp {
+		font-size: 13px;
+		line-height: 1.55;
+		color: var(--muted);
+		margin: -2px 0 10px;
+	}
+	.recent-ov {
+		min-width: 0;
+	}
 	.ovh {
 		font: 600 11px var(--mono);
 		letter-spacing: 0.12em;
@@ -927,60 +930,6 @@
 		font: 12px var(--mono);
 		text-align: right;
 		color: var(--muted);
-	}
-	.strip {
-		display: flex;
-		gap: 10px;
-		overflow-x: auto;
-		padding-bottom: 6px;
-		scroll-snap-type: x proximity;
-		align-items: flex-start;
-	}
-	.tile {
-		flex: 0 0 148px;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		padding: 8px;
-		border-radius: 12px;
-		border: 1px solid var(--line);
-		background: rgba(0, 0, 0, 0.25);
-		scroll-snap-align: start;
-	}
-	.tile:hover {
-		border-color: var(--brand-line);
-	}
-	.tile img,
-	.tile .noimg {
-		width: 100%;
-		aspect-ratio: 1;
-		object-fit: contain;
-		border-radius: 8px;
-		background: #fff;
-	}
-	.tile .noimg {
-		background: rgba(255, 255, 255, 0.05);
-	}
-	.tn {
-		font-size: 12.5px;
-		line-height: 1.35;
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-		min-height: 2.7em;
-	}
-	.tm {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px 6px;
-		align-items: baseline;
-		font: 12px var(--mono);
-	}
-	.tm b {
-		color: var(--accent);
-		font-weight: 600;
 	}
 	.sb {
 		font: 500 10.5px var(--mono);

@@ -7,9 +7,8 @@
 	import RaceSection from '#lib/demo/sections/RaceSection.svelte';
 	import MonitorSection from '#lib/demo/sections/MonitorSection.svelte';
 	import SiteFooter from '#lib/demo/SiteFooter.svelte';
-	import ProductMarquee from '#lib/demo/ProductMarquee.svelte';
 	import SearchDock from '#lib/demo/SearchDock.svelte';
-	import EvolutionSlide from '#lib/demo/sections/EvolutionSlide.svelte';
+	import IntroCarousel from '#lib/demo/IntroCarousel.svelte';
 
 	// Login popup; /account sends signed-out visitors here with ?login=1.
 	let loginOpen = $state(page.url.searchParams.get('login') === '1');
@@ -24,42 +23,6 @@
 			// keep the last values
 		}
 	}
-
-	const FEATURES_ALL = [
-		{
-			icon: 'workflow',
-			title: 'Normalized specs',
-			body: 'Thread, length, material, wattage: every listing mapped to one schema per category, in mm, W and USD per piece.'
-		},
-		{
-			icon: 'analytics',
-			title: 'Same part, one entry',
-			body: 'DIN 912 and ISO 4762 resolve to the same screw, so agents compare every seller of a part instead of every spelling.'
-		},
-		{
-			icon: 'shield',
-			title: 'Verifiable offers',
-			body: 'Each value carries its source URL, fetch time and a data hash, so the agent checks the data before it pays.'
-		},
-		{
-			icon: 'bolt',
-			title: 'Pay per call with x402',
-			body: 'Search previews are free. Full offers cost a few cents in USDC, paid by the agent only when verification passes.'
-		},
-		{
-			icon: 'leads',
-			title: 'MCP native',
-			body: 'Four tools over MCP or REST: resolve_spec, search_offers, get_offers_full, get_product. Plug in any agent.'
-		},
-		{
-			icon: 'globe',
-			title: 'Lightweight answers',
-			body: 'Only decision fields: no scripts, reviews or banners. Hundreds of tokens instead of a hundred thousand.'
-		}
-	];
-	const FEATURES = FEATURES_ALL.filter((f) =>
-		['Normalized specs', 'Verifiable offers', 'Pay per call with x402'].includes(f.title)
-	);
 
 	onMount(() => {
 		refreshStats();
@@ -203,29 +166,12 @@
 		</div>
 	</header>
 
-	<ProductMarquee />
-
-	<section class="section features" id="features">
-		<div class="section-head">
-			<span class="eyebrow" data-reveal>Search index for agents</span>
-			<h2 data-reveal style="--rd:80ms">
-				Web search is built for people. This is built for agents.
-			</h2>
-			<p data-reveal style="--rd:160ms">
-				Shopping pages are made for people: scripts, reviews, banners and a different spelling of
-				the same screw on every site. Agent Catalog keeps only what a buying decision needs.
-			</p>
+	<section class="features" id="features">
+		<div class="section-head compact">
+			<span class="eyebrow">Why agents need their own search</span>
+			<h2>Web search is built for people. This is built for agents.</h2>
 		</div>
-		<div class="feature-grid">
-			{#each FEATURES as f, i (f.title)}
-				<article class="card" data-reveal style="--rd:{i * 90}ms">
-					<div class="card-icon">{@render icon(f.icon)}</div>
-					<h3>{f.title}</h3>
-					<p>{f.body}</p>
-				</article>
-			{/each}
-		</div>
-		<EvolutionSlide />
+		<IntroCarousel />
 	</section>
 
 	<section class="demo-section" id="race">
@@ -267,15 +213,16 @@
 		z-index: 1;
 		transition: opacity 0.6s ease;
 	}
-	.section {
-		position: relative;
-		z-index: 1;
-		max-width: var(--maxw);
-		margin: 0 auto;
-		padding: clamp(80px, 12vw, 160px) 24px;
-	}
 	.eyebrow {
 		margin-bottom: 18px;
+	}
+	.features {
+		position: relative;
+		z-index: 1;
+		padding: clamp(48px, 7vw, 88px) 0 clamp(40px, 6vw, 72px);
+	}
+	.section-head.compact {
+		margin-bottom: 24px;
 	}
 	.section-head {
 		max-width: 680px;
@@ -289,13 +236,6 @@
 		line-height: 1.05;
 		letter-spacing: -0.02em;
 		text-shadow: 0 2px 40px rgba(0, 0, 0, 0.6);
-	}
-	.section-head p {
-		margin-top: 18px;
-		color: var(--muted);
-		font-size: 18px;
-		line-height: 1.65;
-		text-shadow: 0 1px 24px rgba(0, 0, 0, 0.55);
 	}
 	svg {
 		fill: none;
@@ -546,67 +486,6 @@
 		flex-direction: column;
 		gap: 12px;
 	}
-	.feature-grid {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
-		gap: 18px;
-	}
-	.card {
-		position: relative;
-		padding: 30px;
-		border-radius: var(--radius);
-		background: var(--glass);
-		border: 1px solid var(--line);
-		backdrop-filter: blur(14px);
-		overflow: hidden;
-		transition:
-			transform 0.25s,
-			border-color 0.25s,
-			background 0.25s,
-			opacity 0.7s cubic-bezier(0.22, 0.7, 0.2, 1);
-	}
-	.card::before {
-		content: '';
-		position: absolute;
-		inset: 0;
-		background: radial-gradient(120% 120% at 0% 0%, rgba(93, 240, 168, 0.08), transparent 45%);
-		opacity: 0;
-		transition: opacity 0.3s;
-		pointer-events: none;
-	}
-	.card:hover {
-		transform: translateY(-4px);
-		border-color: var(--line-strong);
-		background: var(--glass-2);
-	}
-	.card:hover::before {
-		opacity: 1;
-	}
-	.card-icon {
-		width: 46px;
-		height: 46px;
-		border-radius: 12px;
-		display: grid;
-		place-items: center;
-		color: var(--accent);
-		background: rgba(93, 240, 168, 0.1);
-		border: 1px solid var(--line-strong);
-		margin-bottom: 20px;
-	}
-	.card-icon svg {
-		width: 22px;
-		height: 22px;
-	}
-	.card h3 {
-		font-size: 19px;
-		font-weight: 700;
-		margin-bottom: 10px;
-	}
-	.card p {
-		font-size: 15px;
-		line-height: 1.6;
-		color: var(--muted);
-	}
 
 	.brand img {
 		display: block;
@@ -620,11 +499,6 @@
 			transform: translateY(-9vh);
 		}
 	}
-	@media (max-width: 980px) {
-		.feature-grid {
-			grid-template-columns: repeat(2, 1fr);
-		}
-	}
 	@media (max-width: 720px) {
 		.nav-links {
 			display: none;
@@ -632,14 +506,8 @@
 		.nav {
 			padding: 18px 20px;
 		}
-		.section {
-			padding: clamp(64px, 16vw, 110px) 20px;
-		}
 	}
 	@media (max-width: 560px) {
-		.feature-grid {
-			grid-template-columns: 1fr;
-		}
 		.hero-actions {
 			flex-direction: column;
 			width: 100%;

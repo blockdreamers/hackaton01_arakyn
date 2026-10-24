@@ -12,6 +12,9 @@
 		dims: string[];
 	}
 
+	// embedded: no own heading or page padding, for use inside another panel
+	let { embedded = false }: { embedded?: boolean } = $props();
+
 	let items = $state<Item[]>([]);
 	let failed = $state<Record<number, boolean>>({});
 
@@ -33,8 +36,8 @@
 		})}${SYMBOL[it.currency] ? '' : ' ' + it.currency}`;
 </script>
 
-<section class="showcase" aria-label="Products in the index">
-	<div class="head">
+<section class="showcase" class:embedded aria-label="Products in the index">
+	{#if !embedded}<div class="head">
 		<span class="eyebrow">Live from the index</span>
 		<p>
 			{items.length
@@ -42,6 +45,7 @@
 				: 'Loading products…'}
 		</p>
 	</div>
+	{/if}
 	<div class="box">
 		{#each lanes as lane, li (li)}
 			{#if lane.length}
@@ -93,6 +97,18 @@
 		max-width: 1280px;
 		margin: 0 auto;
 		padding: clamp(32px, 5vw, 56px) 20px 0;
+	}
+	.showcase.embedded {
+		padding: 0;
+		max-width: none;
+	}
+	.embedded .box {
+		border-radius: 12px;
+		padding: 10px 0;
+		gap: 10px;
+	}
+	.embedded .card {
+		width: 260px;
 	}
 	.head {
 		display: flex;
