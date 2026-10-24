@@ -7,6 +7,7 @@
 	import RaceSection from '#lib/demo/sections/RaceSection.svelte';
 	import MonitorSection from '#lib/demo/sections/MonitorSection.svelte';
 	import SiteFooter from '#lib/demo/SiteFooter.svelte';
+	import ProductMarquee from '#lib/demo/ProductMarquee.svelte';
 	import SearchDock from '#lib/demo/SearchDock.svelte';
 	import EvolutionSlide from '#lib/demo/sections/EvolutionSlide.svelte';
 
@@ -201,6 +202,8 @@
 			</div>
 		</div>
 	</header>
+
+	<ProductMarquee />
 
 	<section class="section features" id="features">
 		<div class="section-head">
