@@ -1,11 +1,7 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import * as schema from './schema';
 import { building } from '$app/env';
 import { DATABASE_URL } from '$app/env/private';
+import { createDb } from './client.ts';
 
 if (!DATABASE_URL && !building) throw new Error('DATABASE_URL is not set');
 
-const client = postgres(DATABASE_URL ?? '');
-
-export const db = drizzle(client, { schema });
+export const db = createDb(DATABASE_URL ?? '');

@@ -8,6 +8,13 @@
       "when": 1792809746069,
       "tag": "0000_empty_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792811424395,
+      "tag": "0001_young_human_fly",
+      "breakpoints": true
     }
   ]
 }

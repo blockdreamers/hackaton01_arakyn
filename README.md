@@ -37,6 +37,19 @@ Google Identity Services sign-in. Set `GOOGLE_CLIENT_ID` (OAuth client, type "We
 Authorized JavaScript origins: `https://agent-catalog.techtree.kr`, `http://localhost:5173`.
 The ID token is verified server-side (`/auth/google`), users and sessions are stored in Postgres.
 
+## Scraper
+
+Collects product name, price, list price, image URL, link and categories from shop listing pages into
+`products`. Each shop is a row in `sites` with its country (ISO 3166-1, e.g. `KR`) and currency
+(ISO 4217, e.g. `KRW`); prices are stored in the site's currency.
+
+- Run from the CLI: `bun run scrape [site]` (default `iaansci`)
+- Or press "다시 긁기" on `/dashboard` (runs in the background, progress in `scrape_runs`)
+
+One request per second, identified as `AgentCatalogBot`, only robots.txt-allowed pages. Products
+missing from a finished run are marked `active = false`. To add a shop, implement `SiteScraper`
+in `src/lib/server/scraper/sources/` and register it in `src/lib/server/scraper/index.ts`.
+
 ## Deploy
 
 Every push to `main` deploys via GitHub Actions (`.github/workflows/deploy.yml`). Manual deploy from a
